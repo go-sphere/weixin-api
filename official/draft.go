@@ -212,14 +212,41 @@ func (oa *OfficialAccount) DeletePublish(ctx context.Context, req *DeletePublish
 	return oa.withTokenPost(ctx, "/cgi-bin/freepublish/delete", nil, core.DefaultRequestOptions(), req, nil)
 }
 
+// DraftArticleUpdate carries the fields to change on one article of an
+// existing draft. Every field is optional (omitempty): the draft/update API
+// applies a partial update, so omitting a field leaves the stored value
+// untouched. Use DraftArticle (full, required fields) when adding a draft.
+type DraftArticleUpdate struct {
+	// Title of the article.
+	Title string `json:"title,omitempty"`
+	// Author of the article.
+	Author string `json:"author,omitempty"`
+	// Digest shown in the list.
+	Digest string `json:"digest,omitempty"`
+	// Content HTML of the article.
+	Content string `json:"content,omitempty"`
+	// ContentSourceURL of the original article.
+	ContentSourceURL string `json:"content_source_url,omitempty"`
+	// ThumbMediaID of the cover (permanent material).
+	ThumbMediaID string `json:"thumb_media_id,omitempty"`
+	// NeedOpenComment enables comments.
+	NeedOpenComment int `json:"need_open_comment,omitempty"`
+	// OnlyFansCanComment restricts comments to followers.
+	OnlyFansCanComment int `json:"only_fans_can_comment,omitempty"`
+	// PicCrop2351 uses 2.35:1 cropping when true.
+	PicCrop2351 int `json:"pic_crop_235_1,omitempty"`
+	// PicCrop11 uses 1:1 cropping when true.
+	PicCrop11 int `json:"pic_crop_1_1,omitempty"`
+}
+
 // UpdateDraftArticleRequest updates one article inside a draft.
 type UpdateDraftArticleRequest struct {
 	// MediaID of the draft.
 	MediaID string `json:"media_id"`
 	// Index of the article inside the draft.
 	Index int `json:"index"`
-	// Articles of the updated fields.
-	Articles DraftArticle `json:"articles"`
+	// Articles carries only the fields to change.
+	Articles DraftArticleUpdate `json:"articles"`
 }
 
 // UpdateDraftArticle modifies an article of an existing draft.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 // ============================================================
@@ -356,5 +357,6 @@ func (w *MiniProgram) GetPenaltyList(ctx context.Context, req *GetPenaltyListReq
 	return &result, nil
 }
 
-// fmtInt64 renders an int64 as a decimal string.
-func fmtInt64(v int64) string { return fmtInt(int(v)) }
+// fmtInt64 renders an int64 as a decimal string. It intentionally avoids
+// narrowing through int so 32-bit builds do not truncate large values.
+func fmtInt64(v int64) string { return strconv.FormatInt(v, 10) }

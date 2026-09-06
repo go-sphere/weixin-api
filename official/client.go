@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-sphere/weixin-api/core"
 )
@@ -41,6 +42,12 @@ type Config struct {
 type OfficialAccount struct {
 	*core.Client
 	config Config
+	// qrBaseURL is the host of the token-less QR image renderer
+	// (mp.weixin.qq.com). It is overridden by the test seam.
+	qrBaseURL string
+	// qrHTTPClient issues the token-less QR image GET. nil means a default
+	// client is used (see NewOfficialAccount).
+	qrHTTPClient *http.Client
 }
 
 // NewOfficialAccount builds an Official Account client. cache may be nil.
@@ -49,12 +56,23 @@ func NewOfficialAccount(config Config, cache core.Cache) *OfficialAccount {
 		AppID:     config.AppID,
 		AppSecret: config.AppSecret,
 	}), core.ClientOptions{Cache: cache, Proxy: config.Proxy})
-	return &OfficialAccount{Client: client, config: config}
+	return &OfficialAccount{
+		Client: client,
+		config: config,
+		qrHTTPClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: http.DefaultTransport,
+		},
+	}
 }
 
 // newOfficialWithHTTPClient is the test seam used by unit tests.
 func newOfficialWithHTTPClient(config Config, cache core.Cache, baseURL string, httpClient *http.Client) *OfficialAccount {
-	oa := &OfficialAccount{config: config}
+	oa := &OfficialAccount{
+		config:       config,
+		qrBaseURL:    baseURL,
+		qrHTTPClient: httpClient,
+	}
 	oa.Client = core.NewClient(core.CredentialsOf(core.Credentials{
 		AppID:     config.AppID,
 		AppSecret: config.AppSecret,

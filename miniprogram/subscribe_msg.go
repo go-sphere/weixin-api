@@ -42,8 +42,9 @@ type TemplateTitle struct {
 	Title string `json:"title"`
 	// Type of the template (e.g. 0 = one-time, 2 = long-term).
 	Type int `json:"type"`
-	// CategoryID of the category the template belongs to.
-	CategoryID int `json:"category_id"`
+	// CategoryID of the category the template belongs to. The upstream field is
+	// a camelCase string (e.g. "616"), hence the string type.
+	CategoryID string `json:"categoryId"`
 }
 
 // GetTemplateTitleListResponse is returned by

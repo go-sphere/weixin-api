@@ -2,14 +2,17 @@ package miniprogram
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 )
 
 // ============================================================
-// B2b 零售 / 微信支付分账 (retail merchant profit sharing). All calls require
-// the merchant-signed pay_sig query parameter which the caller must compute
-// with their WeChat-Pay key and pass via WithPaySig.
+// B2b 零售 / 微信支付分账 (retail merchant profit sharing). The money-moving
+// calls (profit sharing, refunds, withdrawals, auto-withdraw configuration)
+// require the merchant-signed pay_sig query parameter which the caller must
+// compute with their WeChat-Pay key and pass via WithPaySig; the pure query
+// endpoints do not.
 // ============================================================
 
 // b2bOptions carries the WeChat-Pay signature for a retail/B2b call.
@@ -20,7 +23,8 @@ type b2bOptions struct {
 // b2bCallOption customises a retail/B2b request.
 type b2bCallOption func(*b2bOptions)
 
-// WithPaySig supplies the WeChat-Pay pay_sig required by the retail B2b APIs.
+// WithPaySig supplies the WeChat-Pay pay_sig required by the retail B2b money
+// APIs.
 func WithPaySig(paySig string) b2bCallOption {
 	return func(o *b2bOptions) { o.paySig = paySig }
 }
@@ -33,8 +37,9 @@ func newB2bOptions(opts []b2bCallOption) *b2bOptions {
 	return o
 }
 
-// b2bPost performs a signed retail/B2b POST and decodes the JSON response into
-// dst (may be nil).
+// b2bPost performs a retail/B2b POST and decodes the JSON response into dst
+// (may be nil). It does not require a pay_sig; use b2bPostRequireSig for the
+// money-moving endpoints that WeChat mandates a signature for.
 func (w *MiniProgram) b2bPost(ctx context.Context, path string, body any, dst any, opts ...b2bCallOption) error {
 	o := newB2bOptions(opts)
 	query := url.Values{}
@@ -49,6 +54,17 @@ func (w *MiniProgram) b2bPost(ctx context.Context, path string, body any, dst an
 		return nil
 	}
 	return decodeJSON(data, dst)
+}
+
+// b2bPostRequireSig is b2bPost for endpoints that WeChat rejects without a
+// pay_sig: the caller must supply one via WithPaySig or the call fails fast
+// instead of sending an unsigned request.
+func (w *MiniProgram) b2bPostRequireSig(ctx context.Context, path string, body any, dst any, opts ...b2bCallOption) error {
+	o := newB2bOptions(opts)
+	if o.paySig == "" {
+		return fmt.Errorf("wechat: %s requires a pay_sig (pass WithPaySig)", path)
+	}
+	return w.b2bPost(ctx, path, body, dst, WithPaySig(o.paySig))
 }
 
 // CreateProfitSharingOrderRequest splits a payment among the receivers.
@@ -69,7 +85,7 @@ type CreateProfitSharingOrderRequest struct {
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/B2b/bill/api_createprofitsharingorder.html
 func (w *MiniProgram) CreateProfitSharingOrder(ctx context.Context, req *CreateProfitSharingOrderRequest, opts ...b2bCallOption) error {
-	return w.b2bPost(ctx, "/retail/B2b/createprofitsharingorder", req, nil, opts...)
+	return w.b2bPostRequireSig(ctx, "/retail/B2b/createprofitsharingorder", req, nil, opts...)
 }
 
 // QueryProfitSharingOrderRequest selects a profit-sharing order.
@@ -193,7 +209,7 @@ type FinishProfitSharingOrderRequest struct {
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/B2b/bill/api_finishprofitsharingorder.html
 func (w *MiniProgram) FinishProfitSharingOrder(ctx context.Context, req *FinishProfitSharingOrderRequest, opts ...b2bCallOption) error {
-	return w.b2bPost(ctx, "/retail/B2b/finishprofitsharingorder", req, nil, opts...)
+	return w.b2bPostRequireSig(ctx, "/retail/B2b/finishprofitsharingorder", req, nil, opts...)
 }
 
 // RefundProfitSharingRequest refunds a previously shared amount.
@@ -214,7 +230,7 @@ type RefundProfitSharingRequest struct {
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/B2b/bill/api_refundprofitsharing.html
 func (w *MiniProgram) RefundProfitSharing(ctx context.Context, req *RefundProfitSharingRequest, opts ...b2bCallOption) error {
-	return w.b2bPost(ctx, "/retail/B2b/refundprofitsharing", req, nil, opts...)
+	return w.b2bPostRequireSig(ctx, "/retail/B2b/refundprofitsharing", req, nil, opts...)
 }
 
 // QueryRefundProfitSharingRequest selects a profit-sharing refund.
@@ -282,7 +298,7 @@ type ManualWithdrawRequest struct {
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/B2b/bill/api_manualwithdraw.html
 func (w *MiniProgram) ManualWithdraw(ctx context.Context, req *ManualWithdrawRequest, opts ...b2bCallOption) error {
-	return w.b2bPost(ctx, "/retail/B2b/withdraw", req, nil, opts...)
+	return w.b2bPostRequireSig(ctx, "/retail/B2b/withdraw", req, nil, opts...)
 }
 
 // QueryWithdrawRequest selects a withdrawal to query.
@@ -325,7 +341,7 @@ type SetAutoWithdrawRequest struct {
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/B2b/bill/api_setautowithdraw.html
 func (w *MiniProgram) SetAutoWithdraw(ctx context.Context, body map[string]any, opts ...b2bCallOption) error {
-	return w.b2bPost(ctx, "/retail/B2b/setautowithdraw", body, nil, opts...)
+	return w.b2bPostRequireSig(ctx, "/retail/B2b/setautowithdraw", body, nil, opts...)
 }
 
 // GetAppKeyRequest requests the merchant app key.

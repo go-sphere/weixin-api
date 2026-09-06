@@ -248,13 +248,14 @@ func (w *MiniProgram) SetKfTyping(ctx context.Context, toUser, command string) e
 }
 
 // UploadKfMedia uploads a temporary media for customer-service image messages
-// and returns its media_id.
+// and returns its media_id. The media type must be passed as a URL query
+// parameter, not as a form field.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/kf-mgnt/kf-message/api_uploadtempmedia.html
 func (w *MiniProgram) UploadKfMedia(ctx context.Context, mediaType string, filename string, content []byte) (string, error) {
-	form := url.Values{}
-	form.Set("type", mediaType)
-	data, err := w.withAccessTokenUpload(ctx, "/cgi-bin/media/upload", nil, defaultReqOptions(), form, "media", filename, "", bytes.NewReader(content))
+	query := url.Values{}
+	query.Set("type", mediaType)
+	data, err := w.withAccessTokenUpload(ctx, "/cgi-bin/media/upload", query, defaultReqOptions(), nil, "media", filename, "", bytes.NewReader(content))
 	if err != nil {
 		return "", err
 	}

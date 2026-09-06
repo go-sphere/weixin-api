@@ -285,20 +285,21 @@ type UserPortraitValue struct {
 	Value int `json:"value"`
 }
 
-// UserPortraitData carries the buckets of one portrait dimension.
+// UserPortraitData carries the buckets of one portrait dimension. The JSON
+// dimension keys are the plural names used by the upstream API.
 type UserPortraitData struct {
 	// Province list of the user distribution.
 	Province []UserPortraitValue `json:"province"`
 	// City list of the user distribution.
 	City []UserPortraitValue `json:"city"`
-	// Gender list (1 male, 2 female).
-	Gender []UserPortraitValue `json:"gender"`
-	// Platform list (Android/iOS/devtools and so on).
-	Platform []UserPortraitValue `json:"platform"`
-	// Device list of device models.
-	Device []UserPortraitValue `json:"device"`
-	// Age list of age buckets.
-	Age []UserPortraitValue `json:"age"`
+	// Genders list (1 male, 2 female).
+	Genders []UserPortraitValue `json:"genders"`
+	// Platforms list (Android/iOS/devtools and so on).
+	Platforms []UserPortraitValue `json:"platforms"`
+	// Devices list of device models.
+	Devices []UserPortraitValue `json:"devices"`
+	// Ages list of age buckets.
+	Ages []UserPortraitValue `json:"ages"`
 }
 
 // GetUserPortraitResponse is returned by GetUserPortrait.
@@ -306,14 +307,10 @@ type GetUserPortraitResponse struct {
 	ErrResponse
 	// RefDate of the report.
 	RefDate string `json:"ref_date"`
-	// VisitUVNew is the number of new users the report covers.
-	VisitUVNew int `json:"visit_uv_new"`
-	// VisitUV is the number of active users the report covers.
-	VisitUV int `json:"visit_uv"`
-	// VisitUVNewData is the portrait of new users.
-	VisitUVNewData UserPortraitData `json:"visit_uv_new_data"`
-	// VisitUVData is the portrait of active users.
-	VisitUVData UserPortraitData `json:"visit_uv_data"`
+	// VisitUVNew is the portrait of first-time (new) users.
+	VisitUVNew UserPortraitData `json:"visit_uv_new"`
+	// VisitUV is the portrait of all active users.
+	VisitUV UserPortraitData `json:"visit_uv"`
 }
 
 // GetUserPortrait returns demographic, geographic and platform portraits of

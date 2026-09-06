@@ -3,6 +3,8 @@ package official
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -89,6 +91,11 @@ type AddPermanentMaterialResponse struct {
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Asset_Management/Adding_Permanent_Assets.html
 func (oa *OfficialAccount) AddPermanentMaterial(ctx context.Context, req *AddPermanentMaterialRequest) (*AddPermanentMaterialResponse, error) {
+	if req.MaterialType == "" {
+		return nil, fmt.Errorf("wechat: add permanent material: empty material type")
+	}
+	query := url.Values{}
+	query.Set("type", req.MaterialType)
 	form := url.Values{}
 	if req.Title != "" {
 		form.Set("title", req.Title)
@@ -96,7 +103,7 @@ func (oa *OfficialAccount) AddPermanentMaterial(ctx context.Context, req *AddPer
 	if req.Introduction != "" {
 		form.Set("introduction", req.Introduction)
 	}
-	data, err := oa.WithTokenUpload(ctx, "/cgi-bin/material/add_material", nil, core.DefaultRequestOptions(), form, "media", req.Filename, "", bytes.NewReader(req.Content))
+	data, err := oa.WithTokenUpload(ctx, "/cgi-bin/material/add_material", query, core.DefaultRequestOptions(), form, "media", req.Filename, "", bytes.NewReader(req.Content))
 	if err != nil {
 		return nil, err
 	}
@@ -244,11 +251,41 @@ func (oa *OfficialAccount) CreateQRCode(ctx context.Context, req *CreateQRCodeRe
 
 // ShowQRCode renders the QR image bytes for a ticket.
 //
+// The render endpoint lives on mp.weixin.qq.com and needs no access_token, so
+// it bypasses the token-based transport entirely; the ticket is URL-encoded
+// exactly once by the query encoder.
+//
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Account_Management/Generating_a_Parametric_QR_Code.html
 func (oa *OfficialAccount) ShowQRCode(ctx context.Context, ticket string) ([]byte, error) {
 	query := url.Values{}
-	query.Set("ticket", url.QueryEscape(ticket))
-	return oa.withTokenRaw(ctx, http.MethodGet, "/cgi-bin/showqrcode", query, core.DefaultRequestOptions(), nil)
+	query.Set("ticket", ticket)
+	return oa.qrImage(ctx, query)
+}
+
+// qrImage performs the token-less GET that renders a QR code from its ticket.
+func (oa *OfficialAccount) qrImage(ctx context.Context, query url.Values) ([]byte, error) {
+	base := oa.qrBaseURL
+	if base == "" {
+		base = "https://mp.weixin.qq.com"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/cgi-bin/showqrcode", nil)
+	if err != nil {
+		return nil, fmt.Errorf("wechat: build showqrcode request: %w", err)
+	}
+	req.URL.RawQuery = query.Encode()
+	httpClient := oa.qrHTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("wechat: showqrcode: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("wechat: showqrcode: unexpected HTTP status %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 }
 
 // CreateShortURL shortens a long URL with a weixin.cn short link.

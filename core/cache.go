@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -20,8 +21,12 @@ type Cache interface {
 }
 
 // memoryCache is a tiny in-process cache used when the caller does not provide
-// one.
-type memoryCache struct{ m map[string]memoryCacheEntry }
+// one. It is guarded by a mutex: concurrent clients commonly share one client
+// (and therefore one cache) across goroutines, and an unguarded map would race.
+type memoryCache struct {
+	mu sync.RWMutex
+	m  map[string]memoryCacheEntry
+}
 
 type memoryCacheEntry struct {
 	value   string
@@ -36,7 +41,9 @@ func NewMemoryCache() Cache {
 }
 
 func (c *memoryCache) Get(_ context.Context, key string) (string, bool, error) {
+	c.mu.RLock()
 	e, ok := c.m[key]
+	c.mu.RUnlock()
 	if !ok || time.Now().After(e.expires) {
 		return "", false, nil
 	}
@@ -49,6 +56,8 @@ func (c *memoryCache) SetWithTTL(_ context.Context, key, value string, ttl time.
 		// cached meaningfully.
 		ttl = time.Minute
 	}
+	c.mu.Lock()
 	c.m[key] = memoryCacheEntry{value: value, expires: time.Now().Add(ttl)}
+	c.mu.Unlock()
 	return nil
 }

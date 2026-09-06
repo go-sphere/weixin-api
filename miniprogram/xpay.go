@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/go-sphere/weixin-api/core"
 )
 
 // ============================================================
@@ -39,7 +41,9 @@ func (w *MiniProgram) xpayRequest(ctx context.Context, path string, body any, se
 		}
 		query.Set("signature", hmacSHA256Hex([]byte(sessionKey), rawBody))
 	}
-	data, err := w.withAccessTokenRaw(ctx, http.MethodPost, path, query, defaultReqOptions(), rawBody)
+	// Sign the exact bytes that are sent (rawBody) but label the request JSON:
+	// all /xpay endpoints accept POST JSON bodies.
+	data, err := w.withAccessTokenRaw(ctx, http.MethodPost, path, query, defaultReqOptions(), core.JSONBytes(rawBody))
 	if err != nil {
 		return nil, err
 	}

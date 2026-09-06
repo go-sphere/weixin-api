@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -26,7 +25,8 @@ type JSSDKConfig struct {
 }
 
 // GetJSSDKConfig builds the signed wx.config payload for a page URL served
-// under the account. It fetches a jsapi ticket via the core client.
+// under the account. It fetches a jsapi ticket via the core client. Any URL
+// fragment (#...) is stripped by jsSignature before signing, as WeChat requires.
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/JS-SDK.html
 func (oa *OfficialAccount) GetJSSDKConfig(ctx context.Context, pageURL string) (*JSSDKConfig, error) {
@@ -39,17 +39,11 @@ func (oa *OfficialAccount) GetJSSDKConfig(ctx context.Context, pageURL string) (
 	if err != nil {
 		return nil, err
 	}
-	params := map[string]string{
-		"jsapi_ticket": ticket,
-		"noncestr":     nonce,
-		"timestamp":    timestamp,
-		"url":          pageURL,
-	}
 	return &JSSDKConfig{
 		AppID:     oa.config.AppID,
 		Timestamp: timestamp,
 		NonceStr:  nonce,
-		Signature: sha1Signature(params),
+		Signature: jsSignature(ticket, nonce, timestamp, pageURL),
 	}, nil
 }
 
@@ -68,23 +62,18 @@ func randomBase62(n int) (string, error) {
 	return sb.String(), nil
 }
 
-// sha1Signature sorts the params and computes the SHA-1 of the joined
-// "k=v&k=v" string (the JS-SDK signature algorithm).
-func sha1Signature(params map[string]string) string {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
+// jsSignature computes the JS-SDK signature. WeChat's algorithm is a SHA-1 of
+// the exact fixed-order string "jsapi_ticket=..&noncestr=..&timestamp=..&url=.."
+// (keys are not sorted and values are not escaped). The URL fragment (#...) is
+// stripped first, as WeChat requires the fragment-less page URL.
+func jsSignature(ticket, nonce, timestamp, pageURL string) string {
+	if i := strings.IndexByte(pageURL, '#'); i >= 0 {
+		pageURL = pageURL[:i]
 	}
-	sort.Strings(keys)
-	var sb strings.Builder
-	for i, k := range keys {
-		if i > 0 {
-			sb.WriteByte('&')
-		}
-		sb.WriteString(k)
-		sb.WriteByte('=')
-		sb.WriteString(params[k])
-	}
-	sum := sha1.Sum([]byte(sb.String()))
+	s := "jsapi_ticket=" + ticket +
+		"&noncestr=" + nonce +
+		"&timestamp=" + timestamp +
+		"&url=" + pageURL
+	sum := sha1.Sum([]byte(s))
 	return hex.EncodeToString(sum[:])
 }

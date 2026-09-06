@@ -96,7 +96,7 @@ type MiniProgramTemplateMessage struct {
 	// Page to open when the message is tapped.
 	Page string `json:"page,omitempty"`
 	// Data mirrors the subscribe message keyword values.
-	Data map[string]string `json:"data,omitempty"`
+	Data SubscribeMessageData `json:"data,omitempty"`
 	// MiniprogramState (developer/trial/formal) of the target page.
 	MiniprogramState string `json:"miniprogram_state,omitempty"`
 	// Lang of the content.

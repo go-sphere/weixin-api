@@ -64,6 +64,14 @@ type CustomerMessage struct {
 	MpVideo *MpVideoMessage `json:"mpvideo,omitempty"`
 	// MiniProgramPage for Mini Program page messages.
 	MiniProgramPage *MiniProgramPageMessage `json:"miniprogrampage,omitempty"`
+	// WxCard for WeChat card (wxcard) messages.
+	WxCard *WxCardMessage `json:"wxcard,omitempty"`
+}
+
+// WxCardMessage sends a WeChat card (卡券).
+type WxCardMessage struct {
+	// CardID of the WeChat card to send.
+	CardID string `json:"card_id"`
 }
 
 // TextMessage is the text payload of a message.

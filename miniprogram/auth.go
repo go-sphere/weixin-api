@@ -55,18 +55,31 @@ func (w *MiniProgram) CheckSessionKey(ctx context.Context, openid, sessionKey st
 	return w.withAccessToken(ctx, http.MethodGet, "/wxa/checksession", query, defaultReqOptions(), nil, nil)
 }
 
-// ResetUserSessionKey invalidates a user's current session key. When a new key
-// is needed (for example after a security incident), the client must re-login
-// via wx.login to obtain a fresh code. The signature is the HMAC-SHA256 of the
+// ResetUserSessionKey invalidates a user's current session key and returns the
+// replacement session key the server issues, so the session can continue
+// without forcing the user to re-login. The signature is the HMAC-SHA256 of the
 // empty string keyed by the current session_key.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/api_resetusersessionkey.html
-func (w *MiniProgram) ResetUserSessionKey(ctx context.Context, openid, sessionKey string) error {
+func (w *MiniProgram) ResetUserSessionKey(ctx context.Context, openid, sessionKey string) (*ResetUserSessionKeyResponse, error) {
 	query := url.Values{}
 	query.Set("openid", openid)
 	query.Set("signature", hmacSHA256Hex([]byte(sessionKey), nil))
 	query.Set("sig_method", "hmac_sha256")
-	return w.withAccessToken(ctx, http.MethodGet, "/wxa/resetusersessionkey", query, defaultReqOptions(), nil, nil)
+	var result ResetUserSessionKeyResponse
+	if err := w.withAccessToken(ctx, http.MethodGet, "/wxa/resetusersessionkey", query, defaultReqOptions(), nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResetUserSessionKeyResponse is returned by ResetUserSessionKey.
+type ResetUserSessionKeyResponse struct {
+	ErrResponse
+	// OpenID of the user whose session key was reset.
+	OpenID string `json:"openid"`
+	// SessionKey is the replacement session key issued by the server.
+	SessionKey string `json:"session_key"`
 }
 
 // SnsOauth2Response mirrors the OAuth2 access_token payload of the WeChat
@@ -204,6 +217,9 @@ func (w *MiniProgram) GetPaidUnionID(ctx context.Context, req *GetPaidUnionIDReq
 
 // GetPluginOpenPidRequest identifies a user of a plugin that shares data with
 // the host Mini Program.
+//
+// Deprecated: the upstream /wxa/getpluginopenpid contract takes a wx.pluginLogin
+// code, not an openid. Use GetPluginOpenPID instead.
 type GetPluginOpenPidRequest struct {
 	// OpenID of the user within the plugin that is sharing the data.
 	OpenID string `json:"openid"`
@@ -216,30 +232,47 @@ type GetPluginOpenPidResponse struct {
 	OpenPID string `json:"openpid"`
 }
 
-// GetPluginOpenPid returns the openpid a plugin observes for a user, so the
-// host app can correlate data coming from the plugin.
+// GetPluginOpenPid returns the openpid a plugin observes for a user.
+//
+// Deprecated: this method sends an openid, which the upstream
+// /wxa/getpluginopenpid endpoint does not accept (it requires the code returned
+// by wx.pluginLogin). Use GetPluginOpenPID.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/user-info/basic-info/api_getpluginopenpid.html
 func (w *MiniProgram) GetPluginOpenPid(ctx context.Context, req *GetPluginOpenPidRequest) (*GetPluginOpenPidResponse, error) {
 	var result GetPluginOpenPidResponse
-	if err := w.withAccessToken(ctx, http.MethodPost, "/wxa/getpluginopenpid", nil, defaultReqOptions(), req, &result); err != nil {
+	if err := w.withAccessTokenPost(ctx, "/wxa/getpluginopenpid", nil, defaultReqOptions(), req, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// GetUserEncryptKeyRequest selects which run-time encryption key to fetch.
+// GetPluginOpenPID maps the code produced by the client-side wx.pluginLogin to
+// the openpid the plugin observes for the user, so the host app can correlate
+// plugin-shared data.
+//
+// Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/user-info/basic-info/api_getpluginopenpid.html
+func (w *MiniProgram) GetPluginOpenPID(ctx context.Context, code string) (*GetPluginOpenPidResponse, error) {
+	return w.getPluginOpenPID(ctx, code)
+}
+
+func (w *MiniProgram) getPluginOpenPID(ctx context.Context, code string) (*GetPluginOpenPidResponse, error) {
+	body := map[string]string{"code": code}
+	var result GetPluginOpenPidResponse
+	if err := w.withAccessTokenPost(ctx, "/wxa/getpluginopenpid", nil, defaultReqOptions(), body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetUserEncryptKeyRequest identifies a user whose run-time encryption keys
+// should be fetched. SessionKey is used server-side to compute the request
+// signature and is never sent to WeChat.
 type GetUserEncryptKeyRequest struct {
 	// OpenID of the user.
-	OpenID string `json:"openid"`
-	// SessionKey of the user, from JsCode2Session.
-	SessionKey string `json:"session_key"`
-	// Signature of the "session_key" string produced with the WeChat Pay v3
-	// private key (optional when the app does not use WeChat Pay).
-	Signature string `json:"signature"`
-	// SignatureMethod is the signing algorithm, "HMAC-SHA256" is the only
-	// supported value (optional).
-	SignatureMethod string `json:"sig_method,omitempty"`
+	OpenID string
+	// SessionKey of the user, from JsCode2Session. Used to sign the request.
+	SessionKey string
 }
 
 // EncryptKeyInfo describes one encryption key issued to the user.
@@ -248,8 +281,8 @@ type EncryptKeyInfo struct {
 	EncryptKey string `json:"encrypt_key"`
 	// Version of the encryption key.
 	Version int `json:"version"`
-	// ExpireAt is the Unix timestamp (seconds) when the key expires.
-	ExpireAt int `json:"expire_at"`
+	// ExpireIn is the remaining validity of the key in seconds.
+	ExpireIn int `json:"expire_in"`
 	// CreateAt is the Unix timestamp (seconds) when the key was created.
 	CreateAt int `json:"create_time"`
 	// Iv is the 16-byte base64 initialisation vector paired with the key.
@@ -267,12 +300,17 @@ type GetUserEncryptKeyResponse struct {
 
 // GetUserEncryptKey fetches the run-time encryption keys for a user, needed to
 // decrypt the encrypted data received through some APIs (e.g. the encrypted
-// phone number under the new privacy scheme).
+// phone number under the new privacy scheme). The session key is sent only as
+// an HMAC-SHA256 signature and never in plaintext.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/user-info/internet/api_getuserencryptkey.html
 func (w *MiniProgram) GetUserEncryptKey(ctx context.Context, req *GetUserEncryptKeyRequest) (*GetUserEncryptKeyResponse, error) {
+	query := url.Values{}
+	query.Set("openid", req.OpenID)
+	query.Set("signature", hmacSHA256Hex([]byte(req.SessionKey), nil))
+	query.Set("sig_method", "hmac_sha256")
 	var result GetUserEncryptKeyResponse
-	if err := w.withAccessToken(ctx, http.MethodPost, "/wxa/business/getuserencryptkey", nil, defaultReqOptions(), req, &result); err != nil {
+	if err := w.withAccessToken(ctx, http.MethodGet, "/wxa/business/getuserencryptkey", query, defaultReqOptions(), nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

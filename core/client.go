@@ -53,6 +53,12 @@ func CredentialsOf(creds Credentials) CredentialProvider {
 	return func() Credentials { return creds }
 }
 
+// JSONBytes is a pre-encoded JSON payload. It behaves like a raw []byte request
+// body but is sent with the JSON content type, for callers that must sign the
+// exact bytes that go on the wire (e.g. the Mini Program XPay pay_sig) while
+// still honouring the endpoint's JSON contract.
+type JSONBytes []byte
+
 // Client is the shared HTTP + token foundation of every WeChat platform
 // package. Platform clients embed *Client and add their own typed endpoint
 // methods on top.
@@ -376,6 +382,8 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	case []byte:
 		reader = bytes.NewReader(b)
 		contentType = "application/octet-stream"
+	case JSONBytes:
+		reader = bytes.NewReader(b)
 	case url.Values:
 		reader = strings.NewReader(b.Encode())
 		contentType = "application/x-www-form-urlencoded; charset=utf-8"

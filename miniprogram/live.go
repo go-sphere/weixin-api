@@ -29,8 +29,25 @@ type LiveRoom struct {
 	AnchorWechat string `json:"anchor_wechat,omitempty"`
 	// CreatorOpenID of the room creator.
 	CreatorOpenID string `json:"creator_openid,omitempty"`
-	// GoodIDs of the goods added to the room.
-	GoodIDs []int64 `json:"goods,omitempty"`
+	// Goods of the goods added to the room.
+	Goods []LiveRoomGoods `json:"goods,omitempty"`
+}
+
+// LiveRoomGoods is one goods entry attached to a live room. Only the fields
+// relevant to management are modelled; WeChat may add more read-only fields.
+type LiveRoomGoods struct {
+	// Name of the goods.
+	Name string `json:"name"`
+	// CoverImg is the URL of the goods cover image.
+	CoverImg string `json:"cover_img"`
+	// URL of the goods detail page.
+	URL string `json:"url"`
+	// Price of the goods in cents.
+	Price int `json:"price"`
+	// PriceType of the goods: 0 = not for sale, 1 = price above the line.
+	PriceType int `json:"price_type"`
+	// GoodsID of the goods.
+	GoodsID int64 `json:"goods_id"`
 }
 
 // LiveRoomPushItem is one live room inside a paginated list.

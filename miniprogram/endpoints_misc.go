@@ -12,12 +12,13 @@ import (
 // endpoints. Each method keeps the exact upstream route.
 // ============================================================
 
-// ClearQuotaLegacy clears the daily quota of an API path (legacy route
-// /cgi-bin/clear_quota). Prefer ClearAPICallQuota when available.
+// ClearQuotaLegacy clears the whole account's daily API quota via the legacy
+// route /cgi-bin/clear_quota (the request body carries the account appid, not a
+// cgi_path). Prefer ClearAPICallQuota when available.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/openApi-mgnt/api_clearquota.html
-func (w *MiniProgram) ClearQuotaLegacy(ctx context.Context, cgiPath string) error {
-	body := map[string]string{"cgi_path": cgiPath}
+func (w *MiniProgram) ClearQuotaLegacy(ctx context.Context) error {
+	body := map[string]string{"appid": w.config.AppID}
 	return w.withAccessTokenPost(ctx, "/cgi-bin/clear_quota", nil, defaultReqOptions(), body, nil)
 }
 

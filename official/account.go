@@ -61,27 +61,52 @@ func (oa *OfficialAccount) GetAPIDomainIP(ctx context.Context) (*GetAPIDomainIPR
 	return &result, nil
 }
 
-// ClearQuota clears the daily API call quota of a cgi path.
+// ClearQuota clears the whole account's daily API call quota via the legacy
+// /cgi-bin/clear_quota route (the request body carries the account appid).
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Message_Management/API_Call_Limits.html
-func (oa *OfficialAccount) ClearQuota(ctx context.Context, cgiPath string) error {
-	body := map[string]string{"cgi_path": cgiPath}
+func (oa *OfficialAccount) ClearQuota(ctx context.Context) error {
+	body := map[string]string{"appid": oa.config.AppID}
 	return oa.withTokenPost(ctx, "/cgi-bin/clear_quota", nil, core.DefaultRequestOptions(), body, nil)
+}
+
+// QuotaDetailItem is one row of the API call quota detail.
+type QuotaDetailItem struct {
+	// Quota of the cgi path for the day.
+	Quota int `json:"quota"`
+	// Used of the cgi path for the day.
+	Used int `json:"used"`
+	// Surplus of the cgi path for the day.
+	Surplus int `json:"surplus"`
+	// ComponentQuota of the cgi path for the day (component accounts).
+	ComponentQuota int `json:"component_quota,omitempty"`
+}
+
+// GetAPICallQuotaResponse is returned by GetAPICallQuota.
+type GetAPICallQuotaResponse struct {
+	ErrResponse
+	// Quota of the queried cgi path for the day.
+	Quota int `json:"quota"`
+	// Used of the queried cgi path for the day.
+	Used int `json:"used"`
+	// Surplus of the queried cgi path for the day.
+	Surplus int `json:"surplus"`
+	// ComponentQuota of the queried cgi path (component accounts).
+	ComponentQuota int `json:"component_quota"`
+	// DetailList carries per-interface rows for the whole-account quota query.
+	DetailList []QuotaDetailItem `json:"detail_list,omitempty"`
 }
 
 // GetAPICallQuota returns the quota usage of a cgi path.
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Message_Management/API_Call_Limits.html
-func (oa *OfficialAccount) GetAPICallQuota(ctx context.Context, cgiPath string) (map[string]any, error) {
-	var result struct {
-		ErrResponse
-		Raw map[string]any `json:"-"`
-	}
+func (oa *OfficialAccount) GetAPICallQuota(ctx context.Context, cgiPath string) (*GetAPICallQuotaResponse, error) {
 	body := map[string]string{"cgi_path": cgiPath}
+	var result GetAPICallQuotaResponse
 	if err := oa.withTokenPost(ctx, "/cgi-bin/openapi/quota/get", nil, core.DefaultRequestOptions(), body, &result); err != nil {
 		return nil, err
 	}
-	return result.Raw, nil
+	return &result, nil
 }
 
 // ============================================================

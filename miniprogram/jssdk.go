@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -27,7 +26,8 @@ type JsSDKConfigResponse struct {
 // GetJsSDKConfig builds the signed wx.config payload for a web page URL served
 // under the configured account. It internally fetches a jsapi ticket. The same
 // signature is also valid for JSSDK usage inside web-views opened from the Mini
-// Program when the host account is bound accordingly.
+// Program when the host account is bound accordingly. Any URL fragment (#...) is
+// stripped by jsSignature before signing, as WeChat requires.
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/JS-SDK.html
 func (w *MiniProgram) GetJsSDKConfig(ctx context.Context, pageURL string) (*JsSDKConfigResponse, error) {
@@ -65,30 +65,19 @@ func randomBase62(n int) (string, error) {
 	return sb.String(), nil
 }
 
-// jsSignature computes the JS-SDK signature: the URL-decode sensitive string
-// "jsapi_ticket=...&noncestr=...&timestamp=...&url=..." sorted lexically and
-// SHA-1 hashed.
+// jsSignature computes the JS-SDK signature. WeChat's algorithm is a SHA-1 of
+// the exact fixed-order string "jsapi_ticket=..&noncestr=..&timestamp=..&url=.."
+// (keys are not sorted and values are not escaped). The URL fragment (#...) is
+// stripped first. This matches official.jsSignature so the two platform
+// packages sign identically.
 func jsSignature(ticket, nonce, timestamp, pageURL string) string {
-	params := map[string]string{
-		"jsapi_ticket": ticket,
-		"noncestr":     nonce,
-		"timestamp":    timestamp,
-		"url":          pageURL,
+	if i := strings.IndexByte(pageURL, '#'); i >= 0 {
+		pageURL = pageURL[:i]
 	}
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var sb strings.Builder
-	for i, k := range keys {
-		if i > 0 {
-			sb.WriteByte('&')
-		}
-		sb.WriteString(k)
-		sb.WriteByte('=')
-		sb.WriteString(params[k])
-	}
-	sum := sha1.Sum([]byte(sb.String()))
+	s := "jsapi_ticket=" + ticket +
+		"&noncestr=" + nonce +
+		"&timestamp=" + timestamp +
+		"&url=" + pageURL
+	sum := sha1.Sum([]byte(s))
 	return hex.EncodeToString(sum[:])
 }

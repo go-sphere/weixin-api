@@ -54,6 +54,10 @@ type MassSendResponse struct {
 
 // MassSendByTag sends a mass message to the followers of a tag.
 //
+// Mass sends are non-idempotent and the send helpers do not accept a
+// clientmsgid, so token-expiry auto-retry is disabled: the SDK must not
+// re-submit a crowd-targeting message on its own.
+//
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Message_Management/Batch_Sends_and_Group_Sends.html
 func (oa *OfficialAccount) MassSendByTag(ctx context.Context, tagID int, msgType string, mediaIDOrText string) (*MassSendResponse, error) {
 	msg := &MassMessage{
@@ -62,13 +66,14 @@ func (oa *OfficialAccount) MassSendByTag(ctx context.Context, tagID int, msgType
 	}
 	attachMassContent(msg, mediaIDOrText)
 	var result MassSendResponse
-	if err := oa.withTokenPost(ctx, "/cgi-bin/message/mass/sendall", nil, core.DefaultRequestOptions(), msg, &result); err != nil {
+	if err := oa.withTokenPost(ctx, "/cgi-bin/message/mass/sendall", nil, core.RequestOptions{Retryable: false}, msg, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// MassSendToOpenIDs sends a mass message to an explicit openid list.
+// MassSendToOpenIDs sends a mass message to an explicit openid list. Like
+// MassSendByTag it is non-idempotent, so token-expiry auto-retry is disabled.
 //
 // Reference: https://developers.weixin.qq.com/doc/offiaccount/Message_Management/Batch_Sends_and_Group_Sends.html
 func (oa *OfficialAccount) MassSendToOpenIDs(ctx context.Context, openids []string, msgType, mediaIDOrText string) (*MassSendResponse, error) {
@@ -78,7 +83,7 @@ func (oa *OfficialAccount) MassSendToOpenIDs(ctx context.Context, openids []stri
 	}
 	attachMassContent(msg, mediaIDOrText)
 	var result MassSendResponse
-	if err := oa.withTokenPost(ctx, "/cgi-bin/message/mass/send", nil, core.DefaultRequestOptions(), msg, &result); err != nil {
+	if err := oa.withTokenPost(ctx, "/cgi-bin/message/mass/send", nil, core.RequestOptions{Retryable: false}, msg, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

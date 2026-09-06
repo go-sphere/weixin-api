@@ -100,6 +100,12 @@ type MessagePushBody struct {
 
 // DecryptBody decrypts an encrypted message push body and returns the
 // plaintext XML.
+//
+// WeChat's message-push encryption (安全模式) uses AES-256-CBC with a fixed IV
+// derived from the AES key (iv = key[:16]) and does NOT prepend an IV to the
+// ciphertext. The plaintext layout is:
+//
+//	random(16) + msg_len(4, big endian) + msg + receiveid(appid)
 func (c *MessageCrypto) DecryptBody(encrypted string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(encrypted)
 	if err != nil {
@@ -109,13 +115,13 @@ func (c *MessageCrypto) DecryptBody(encrypted string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("wechat: init aes: %w", err)
 	}
-	if len(data) < aes.BlockSize || len(data)%aes.BlockSize != 0 {
+	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
 		return "", errors.New("wechat: invalid encrypted body length")
 	}
-	iv := data[:aes.BlockSize]
-	payload := data[aes.BlockSize:]
+	iv := c.aesKey[:aes.BlockSize]
 	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(payload, payload)
+	payload := make([]byte, len(data))
+	mode.CryptBlocks(payload, data)
 	payload, err = pkcs7Unpad(payload)
 	if err != nil {
 		return "", fmt.Errorf("wechat: unpad decrypted body: %w", err)
@@ -154,7 +160,9 @@ func pkcs7Unpad(data []byte) ([]byte, error) {
 }
 
 // EncryptReplyBody encrypts a reply XML into the <Encrypt> envelope WeChat
-// expects from the message push receiver.
+// expects from the message push receiver. It mirrors the DecryptBody scheme:
+// AES-256-CBC with iv = key[:16], plaintext random(16)+len(4)+msg+appid, and no
+// IV prefix on the wire.
 func (c *MessageCrypto) EncryptReplyBody(plainXML string) (string, error) {
 	block, err := aes.NewCipher(c.aesKey)
 	if err != nil {
@@ -170,15 +178,11 @@ func (c *MessageCrypto) EncryptReplyBody(plainXML string) (string, error) {
 	raw = append(raw, []byte(plainXML)...)
 	raw = append(raw, []byte(c.appID)...)
 	raw = pkcs7Pad(raw, aes.BlockSize)
-	iv := make([]byte, aes.BlockSize)
-	if _, err := rand.Read(iv); err != nil {
-		return "", err
-	}
+	iv := c.aesKey[:aes.BlockSize]
 	mode := cipher.NewCBCEncrypter(block, iv)
 	out := make([]byte, len(raw))
 	mode.CryptBlocks(out, raw)
-	encrypted := append(iv, out...)
-	return base64.StdEncoding.EncodeToString(encrypted), nil
+	return base64.StdEncoding.EncodeToString(out), nil
 }
 
 // EncryptedReplyEnvelope wraps an encrypted reply into the XML <xml><Encrypt>

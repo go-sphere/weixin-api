@@ -33,7 +33,7 @@ type MsgSecCheckResult struct {
 	// 21000 = other.
 	Label int `json:"label"`
 	// Suggestion: "pass", "review" or "risky".
-	Suggestion string `json:"suggestion"`
+	Suggestion string `json:"suggest"`
 	// RiskLevel for risk-level-2 accounts: "normal", "risky" or "review".
 	RiskLevel string `json:"risk_level,omitempty"`
 }
