@@ -3,6 +3,7 @@ package core
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 // TestMemoryCacheConcurrent exercises the default in-process cache from many
@@ -12,21 +13,19 @@ func TestMemoryCacheConcurrent(t *testing.T) {
 	c := NewMemoryCache()
 	ctx := t.Context()
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for i := range 50 {
+		wg.Go(func() {
 			key := "k"
 			if i%2 == 0 {
 				key = "k2"
 			}
-			if err := c.SetWithTTL(ctx, key, "v", timeMinute); err != nil {
+			if err := c.SetWithTTL(ctx, key, "v", time.Minute); err != nil {
 				t.Errorf("SetWithTTL: %v", err)
 			}
 			if _, ok, err := c.Get(ctx, key); err != nil || !ok {
 				t.Errorf("Get: ok=%v err=%v", ok, err)
 			}
-		}(i)
+		})
 	}
 	wg.Wait()
 }

@@ -1,36 +1,83 @@
 # weixin-api
 
 A typed, idiomatic Go client suite for the WeChat **server APIs**. Each WeChat
-platform gets its own package built on a shared HTTP/token foundation:
+platform gets its own package built on a shared HTTP/token foundation. The
+platform packages are **generated** from the official documentation by
+[`tools/docsync`](./tools/docsync) — do not edit them by hand; run
+`make docs-sync` and the change appears (or upstream changed).
 
 | Package | Platform | Reference |
 | --- | --- | --- |
 | [`miniprogram`](./miniprogram) | 微信小程序 Mini Program | https://developers.weixin.qq.com/miniprogram/dev/server/API/ |
 | [`official`](./official) | 公众号 / 服务号 Official Account | https://developers.weixin.qq.com/doc/subscription/api/ · https://developers.weixin.qq.com/doc/service/guide/ |
-| [`core`](./core) | shared foundation (transport, tokens, errors, crypto) | — |
+| [`core`](./core) | shared foundation (transport, tokens, errors, crypto, JS-SDK) | — |
+| [`internal/gentest`](./internal/gentest) | package-level invariants for the generated code | — |
+| [`tools/docsync`](./tools/docsync) | documentation crawler, extractor and code generator | — |
 
-All packages are built with a plain `net/http` implementation — **no third
-party HTTP library** — and every endpoint method carries typed request/response
-structs plus a `Reference:` link straight to its official WeChat documentation
-page (English Go doc throughout, AI/agent friendly).
+The clients use a plain `net/http` transport — **no third party HTTP library** —
+and every endpoint method carries typed request/response structs plus a `Doc:`
+link straight to its official WeChat documentation page. Regeneration is
+byte-for-byte reproducible, so `git diff` over the generated packages shows
+exactly what changed upstream.
+
+Regenerate with `make docs-sync`; check for upstream drift with
+`make docs-check`; run the pipeline and wire-level test suites with
+`make docs-test` and `make docs-parity`.
+
+The pipeline runs in stages, so the slow network crawl happens once into a
+gitignored local cache and the generator can then be iterated offline:
+
+```sh
+make docs-crawl    # crawl the doc site -> .docs-cache/ + manifest.json (network)
+make docs-gen      # rebuild miniprogram/ and official/ from the cache (offline)
+make docs-swagger  # rebuild the OpenAPI contracts from the cache (offline)
+IGNORE_CACHE=1 make docs-gen   # force a re-crawl first
+```
+
+### Generated client configuration
+
+`miniprogram.New(Config{...})` / `official.New(Config{...})` accept:
+
+- `AppID` / `AppSecret` — the client fetches, caches and refreshes the
+  `access_token` itself; request structs do not expose that parameter, so it
+  cannot be blanked out by a zero value.
+- `Token` — supply your own access-token source instead (no caching/refresh).
+- `AppKey` — the 米大师 virtual-payment signing key. Endpoints under `/xpay/`
+  are signed automatically: `pay_sig = HMAC-SHA256(AppKey, path + "&" + body)`,
+  plus `signature = HMAC-SHA256(SessionKey, body)` for user-level calls (set
+  the generated `SessionKey` field on the request). A signed call fails fast
+  when `AppKey` is missing rather than sending an unsigned request.
+- `Env` — the Mini Program environment (`release` / `trial` / `develop`); the
+  subscribe-message API defaults its `miniprogram_state` from it.
+- `Cache`, `Proxy`, `BaseURL`, `HTTPClient` — optional overrides.
+
+WeChat Pay `retail/B2b` endpoints instead take a caller-computed `PaySig`
+field, because the merchant's payment key is not the app key.
 
 ## Packages
 
 ### core
 
-Shared infrastructure extracted from the Mini Program client so every platform
-package stays thin:
+The shared runtime behind every platform package. The generated clients
+delegate all cross-platform behaviour here, so it exists once rather than once
+per platform:
 
-- `core.Client`: HTTP transport (JSON / form / raw / multipart upload), proxy
-  and timeout configuration, per-account `access_token` & JS-SDK ticket caching
-  with singleflight deduplication and transparent retry after token-expiry
-  errors.
-- `core.ErrResponse` / `core.APIError`: the universal `{"errcode":..,"errmsg":..}`
-  envelope and classified errors; token failures map to sentinel errors
-  (`core.ErrorInvalidCredential`, ...) for `errors.Is`.
+- `core.EndpointClient`: the runtime of the generated endpoint methods —
+  tag-driven request assembly (query vs JSON body), application-credential and
+  access-token injection, and request signing.
+- `core.Client`: the authenticated HTTP client beneath it; plain `net/http`
+  transport, proxy/timeout configuration, and per-account `access_token`
+  caching with singleflight de-duplication plus a transparent retry after a
+  token-expiry error.
+- `core.APIError` / `core.ErrResponse`: the universal
+  `{"errcode":..,"errmsg":..}` envelope. Token failures collapse into sentinel
+  errors (`core.ErrorInvalidCredential`, ...) for `errors.Is`; other codes keep
+  the code, message, `rid` and raw body.
 - `core.Cache` + `core.NewMemoryCache()`: pluggable credential cache.
 - `core.MessageCrypto`: message-push callback signature verification and
-  AES-256-CBC payload (de)encryption.
+  AES-256-CBC payload (de)encryption. Also `core.JSSDKConfig` /
+  `core.JSSDKSignature` for JS-SDK signing.
+- `core.MiniAppEnv`: deployment environment used by the subscribe-message APIs.
 
 ### miniprogram
 

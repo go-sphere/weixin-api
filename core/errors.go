@@ -1,11 +1,23 @@
 package core
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 )
+
+// hmacSHA256Hex returns the lowercase hex HMAC-SHA256 of msg under key. It is
+// the primitive behind the XPay request signatures.
+func hmacSHA256Hex(key, msg []byte) string {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(msg)
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 // Well-known WeChat business error codes that affect access-token lifecycle
 // management. Platform clients use them to decide whether a failed request
@@ -52,14 +64,24 @@ func (e ErrResponse) Error() string {
 	return fmt.Sprintf("wechat api error: %s (errcode %d)", e.ErrMsg, e.ErrCode)
 }
 
-// APIError is a WeChat business error that also carries the trace id (rid) of
-// the failing request when the upstream response includes one. The rid is the
-// value to report to WeChat support when debugging an API failure.
+// APIError is a WeChat business error. It carries the trace id (rid) when the
+// upstream response includes one — the value to report to WeChat support — and
+// the raw response bytes so callers can inspect fields the envelope does not
+// cover. For endpoints whose documentation tabulates error codes, Description,
+// Solution and Doc carry the documented meaning of the code.
 type APIError struct {
 	ErrResponse
 	// RID is the WeChat request trace id (rid field), present on some error
 	// responses. It is empty when the upstream response did not include one.
 	RID string `json:"rid"`
+	// Description is the documented description of the error code.
+	Description string `json:"-"`
+	// Solution is the documented remedy for the error code.
+	Solution string `json:"-"`
+	// Raw is the unmodified response body.
+	Raw json.RawMessage `json:"-"`
+	// Doc is the documented entry the code matched, when one exists.
+	Doc *ErrDoc `json:"-"`
 }
 
 // Error implements the error interface.
@@ -109,26 +131,11 @@ func scanErrorBody(body []byte) error {
 	if probe.ErrCode == 0 {
 		return nil
 	}
-	return ClassifyBusinessError(probe.ErrCode, probe.ErrMsg, probe.RID)
-}
-
-// DecodeJSON unmarshals a JSON payload into dst. It is a thin wrapper that
-// keeps error handling consistent across every API method.
-func DecodeJSON(data []byte, dst any) error {
-	if err := json.Unmarshal(data, dst); err != nil {
-		return fmt.Errorf("wechat: decode response body: %w", err)
+	err := ClassifyBusinessError(probe.ErrCode, probe.ErrMsg, probe.RID)
+	// Token failures collapse into sentinels for errors.Is matching; every
+	// other code keeps the response bytes for inspection.
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
+		apiErr.Raw = bytes.Clone(body)
 	}
-	return nil
-}
-
-// JSONMarshal marshals v into JSON bytes (exported so platform packages that
-// compute payload signatures can reuse it).
-func JSONMarshal(v any) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-// HMACSHA256Hex is a shared HMAC-SHA256 helper (lowercase hex), used for user
-// session signatures (checksession), XPay pay_sig and similar.
-func HMACSHA256Hex(key, msg []byte) string {
-	return hmacSHA256Hex(key, msg)
+	return err
 }

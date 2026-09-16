@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Swagger contract and generated client emitted by tools/docsync
+/tools/docsync/swagger/** linguist-generated=true
+/generated/** linguist-generated=true

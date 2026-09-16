@@ -18,5 +18,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
-      - name: Test
+
+      # Library module: tidy check, lint and unit tests.
+      - name: Library check
         run: make test
+
+      # docsync is a separate module, and its parity suite is the wire-level
+      # safety net for the generated clients; neither runs under `go test ./...`
+      # of the library module, so they are invoked explicitly. Without this the
+      # generated client regressions would never be caught in CI.
+      - name: Generator tests + parity
+        run: make docs-test docs-parity
+
+      - name: Example tests
+        run: make examples-test

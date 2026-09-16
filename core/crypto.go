@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -11,7 +12,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -63,7 +64,7 @@ func (c *MessageCrypto) VerifySignature(signature, timestamp, nonce, echostr str
 		return false
 	}
 	parts := []string{c.token, timestamp, nonce, echostr}
-	sort.Strings(parts)
+	slices.Sort(parts)
 	sum := sha1.Sum([]byte(strings.Join(parts, "")))
 	return signature == hex.EncodeToString(sum[:])
 }
@@ -198,7 +199,7 @@ func (c *MessageCrypto) EncryptedReplyEnvelope(plainXML string) (string, error) 
 // SignReply computes the msg_signature for a reply message.
 func (c *MessageCrypto) SignReply(timestamp, nonce, encryptedBody string) string {
 	parts := []string{c.token, timestamp, nonce, encryptedBody}
-	sort.Strings(parts)
+	slices.Sort(parts)
 	sum := sha1.Sum([]byte(strings.Join(parts, "")))
 	return hex.EncodeToString(sum[:])
 }
@@ -228,15 +229,5 @@ func (c *MessageCrypto) DecodeEncryptedPushXML(raw []byte) (*MessagePushBody, er
 // pkcs7Pad pads data to a multiple of blockSize using PKCS#7.
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padLen := blockSize - len(data)%blockSize
-	pad := bytesRepeat(byte(padLen), padLen)
-	return append(data, pad...)
-}
-
-// bytesRepeat builds a byte slice filled with b repeated n times.
-func bytesRepeat(b byte, n int) []byte {
-	out := make([]byte, n)
-	for i := range out {
-		out[i] = b
-	}
-	return out
+	return append(data, bytes.Repeat([]byte{byte(padLen)}, padLen)...)
 }

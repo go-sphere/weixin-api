@@ -1,0 +1,74 @@
+{
+  "miniprogram.CallbackCheck": {
+    "body": "{}",
+    "content_type": "application/json; charset=utf-8",
+    "method": "POST",
+    "path": "/cgi-bin/callback/check",
+    "query": "access_token=TOKEN",
+    "access_token": "TOKEN"
+  },
+  "miniprogram.JsCode2Session": {
+    "body": "",
+    "content_type": "application/json; charset=utf-8",
+    "method": "GET",
+    "path": "/sns/jscode2session",
+    "query": "appid=appid&grant_type=authorization_code&js_code=CODE&secret=secret",
+    "access_token": ""
+  },
+  "official.CreateTag": {
+    "body": "{\"tag\":{\"name\":\"标签A\"}}",
+    "content_type": "application/json; charset=utf-8",
+    "method": "POST",
+    "path": "/cgi-bin/tags/create",
+    "query": "access_token=TOKEN",
+    "access_token": "TOKEN"
+  },
+  "official.GetAPIDomainIP": {
+    "body": "",
+    "content_type": "application/json; charset=utf-8",
+    "method": "GET",
+    "path": "/cgi-bin/get_api_domain_ip",
+    "query": "access_token=TOKEN",
+    "access_token": "TOKEN"
+  },
+  "official.GetCallbackIP": {
+    "body": "",
+    "content_type": "application/json; charset=utf-8",
+    "method": "GET",
+    "path": "/cgi-bin/getcallbackip",
+    "query": "access_token=TOKEN",
+    "access_token": "TOKEN"
+  },
+  "official.GetTempMedia": {
+    "body": "",
+    "content_type": "application/json; charset=utf-8",
+    "method": "GET",
+    "path": "/cgi-bin/media/get",
+    "query": "access_token=TOKEN&media_id=MID",
+    "access_token": "TOKEN"
+  },
+  "official.GetUserInfo": {
+    "body": "",
+    "content_type": "application/json; charset=utf-8",
+    "method": "GET",
+    "path": "/cgi-bin/user/info",
+    "query": "access_token=TOKEN&lang=zh_CN&openid=OPENID",
+    "access_token": "TOKEN"
+  },
+  "official.ListDraft": {
+    "body": "{\"count\":10,\"offset\":5}",
+    "content_type": "application/json; charset=utf-8",
+    "method": "POST",
+    "path": "/cgi-bin/draft/batchget",
+    "query": "access_token=TOKEN",
+    "access_token": "TOKEN"
+  },
+  "official.UploadTempMedia": {
+    "body": "RAW:--f6ad20cff8a2dff211ced5c52ed01f53073c5fd30dbcf4e14194fd704b28\r\nContent-Disposition: form-data; name=\"media\"; filename=\"a.png\"\r\n\r\nPNGDATA\r\n--f6ad20cff8a2dff211ced5c52ed01f53073c5fd30dbcf4e14194fd704b28--\r\n",
+    "content_type": "multipart/form-data; boundary=f6ad20cff8a2dff211ced5c52ed01f53073c5fd30dbcf4e14194fd704b28",
+    "method": "POST",
+    "path": "/cgi-bin/media/upload",
+    "query": "access_token=TOKEN&type=image",
+    "access_token": "TOKEN"
+  }
+}

@@ -23,7 +23,15 @@ go.work.sum
 
 # env file
 .env
+/code_review
 /examples/gin-login
 /.agents/skills
 /.claude/skills
 skills-lock.json
+
+# docsync local page cache: raw response bytes, one file per doc page, so the
+# swagger/Go generation stages run offline (see tools/docsync/README.md).
+# manifest.json is committed, the cache is not. Safe to delete; `make docs-crawl`
+# rebuilds it.
+/.docs-cache/
+LLM.ENV
