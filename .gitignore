@@ -24,10 +24,13 @@ go.work.sum
 # env file
 .env
 /code_review
-/examples/gin-login
 /.agents/skills
 /.claude/skills
 skills-lock.json
+
+# `go build` output of the example module (the binary is named after its
+# directory, so it must be excluded explicitly).
+/examples/gin-login/gin-login
 
 # docsync local page cache: raw response bytes, one file per doc page, so the
 # swagger/Go generation stages run offline (see tools/docsync/README.md).
