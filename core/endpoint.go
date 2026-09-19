@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -107,6 +108,9 @@ type EndpointConfig struct {
 	BaseURL string
 	// HTTPClient injects a custom HTTP client.
 	HTTPClient *http.Client
+	// Modifiers decorate outgoing requests and incoming responses. Use installs
+	// more on an existing client. nil means no decoration.
+	Modifiers []RequestModifier
 }
 
 // EndpointClient issues documented WeChat API calls. Token caching,
@@ -114,10 +118,11 @@ type EndpointConfig struct {
 // embedded Client.
 type EndpointClient struct {
 	*Client
-	tokenFn func(ctx context.Context) (string, error)
-	appID   string
-	appKey  string
-	env     MiniAppEnv
+	tokenFn   func(ctx context.Context) (string, error)
+	appID     string
+	appKey    string
+	env       MiniAppEnv
+	modifiers []RequestModifier
 }
 
 // NewEndpointClient builds a client for one WeChat platform account.
@@ -136,15 +141,16 @@ func NewEndpointClient(cfg EndpointConfig) *EndpointClient {
 			BaseURL:    cfg.BaseURL,
 			HTTPClient: cfg.HTTPClient,
 		}),
-		tokenFn: cfg.Token,
-		appID:   cfg.AppID,
-		appKey:  cfg.AppKey,
-		env:     env,
+		tokenFn:   cfg.Token,
+		appID:     cfg.AppID,
+		appKey:    cfg.AppKey,
+		env:       env,
+		modifiers: slices.Clone(cfg.Modifiers),
 	}
 }
 
-// WithCredentials derives a client for another account, sharing the token cache
-// and HTTP client so one process can serve several accounts.
+// WithCredentials derives a client for another account, sharing the token cache,
+// HTTP client and request modifiers so one process can serve several accounts.
 func (c *EndpointClient) WithCredentials(appID, appSecret string) *EndpointClient {
 	return NewEndpointClient(EndpointConfig{
 		AppID:      appID,
@@ -155,6 +161,7 @@ func (c *EndpointClient) WithCredentials(appID, appSecret string) *EndpointClien
 		Cache:      c.cache,
 		BaseURL:    c.baseURL,
 		HTTPClient: c.httpClient,
+		Modifiers:  c.modifiers,
 	})
 }
 
@@ -220,6 +227,20 @@ func omitsZero(tag string) bool {
 	return false
 }
 
+// setQueryValue writes one query-tagged field. A slice is written as one
+// name=value pair per element, the conventional multi-value encoding; the other
+// kinds use their default formatting. (No endpoint in the generated clients
+// carries a slice query parameter today, so this path is defensive.)
+func setQueryValue(values url.Values, name string, fv reflect.Value) {
+	if fv.Kind() == reflect.Slice || fv.Kind() == reflect.Array {
+		for i := range fv.Len() {
+			values.Add(name, fmt.Sprintf("%v", fv.Index(i).Interface()))
+		}
+		return
+	}
+	values.Set(name, fmt.Sprintf("%v", fv.Interface()))
+}
+
 // applyTags fills the URL query and JSON body from a request struct's tags.
 // Fields documented as required carry no omitempty and are always sent, even
 // when they hold the zero value. declared receives every query key the struct
@@ -245,7 +266,7 @@ func applyTags(rv reflect.Value, values url.Values, declared map[string]bool) (m
 			if omitsZero(q) && fv.IsZero() {
 				continue
 			}
-			values.Set(name, fmt.Sprintf("%v", fv.Interface()))
+			setQueryValue(values, name, fv)
 			continue
 		}
 		j := field.Tag.Get("json")
@@ -281,6 +302,11 @@ func (c *EndpointClient) injectCredentials(values url.Values, declared map[strin
 // buildRequest assembles a JSON request: query-tagged fields become URL
 // parameters, json-tagged fields the request body, and the access token plus
 // any required signature are appended.
+//
+// Before assembling, the installed RequestModifiers are asked for a decorated
+// request (see modifier.go); one that accepts completely replaces the body and
+// adds its headers, which is how the API security layer encrypts and signs a
+// call without the generated code knowing about it.
 func (c *EndpointClient) buildRequest(ctx context.Context, token, method, path string, req any, sign SignMode) (*http.Request, error) {
 	values := url.Values{}
 	if token != "" {
@@ -322,6 +348,17 @@ func (c *EndpointClient) buildRequest(ctx context.Context, token, method, path s
 	if sign == SignPaySigSession {
 		values.Set("signature", hmacSHA256Hex([]byte(sessionKey), body))
 	}
+	// Give the installed decorators their chance to replace the body and add
+	// headers. They see the typed request, so a parameter's declared Go type is
+	// preserved.
+	var extraHeaders map[string]string
+	info := RequestInfo{URLPath: c.baseURL + path, Path: path, Method: method, Credentials: c.Credentials()}
+	if modified, err := c.modifyRequest(info, req); err != nil {
+		return nil, err
+	} else if modified != nil {
+		body = modified.Body
+		extraHeaders = modified.Headers
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, method, c.baseURL+path+"?"+values.Encode(), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -331,7 +368,59 @@ func (c *EndpointClient) buildRequest(ctx context.Context, token, method, path s
 	if method != http.MethodGet {
 		httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
+	for name, value := range extraHeaders {
+		httpReq.Header.Set(name, value)
+	}
 	return httpReq, nil
+}
+
+// declaredParams returns the set of documented parameter names a request struct
+// defines (both query- and body-tagged), mirroring the declared map applyTags
+// fills.
+func declaredParams(rv reflect.Value) map[string]bool {
+	declared := map[string]bool{}
+	if !rv.IsValid() || rv.Kind() != reflect.Struct {
+		return declared
+	}
+	t := rv.Type()
+	for i := range t.NumField() {
+		field := t.Field(i)
+		for _, key := range []string{"query", "json"} {
+			tag := field.Tag.Get(key)
+			if tag == "" || tag == "-" {
+				continue
+			}
+			name, _, _ := strings.Cut(tag, ",")
+			if name != "" && name != "-" {
+				declared[name] = true
+			}
+		}
+	}
+	return declared
+}
+
+// injectCredentialParams fills appid/secret for the endpoints that authenticate
+// with the application credentials instead of an access token, matching
+// injectCredentials on the plain path: only parameters the struct declares are
+// touched, and a caller-supplied non-empty value wins.
+func injectCredentialParams(params []apiParam, declared map[string]bool, creds Credentials) []apiParam {
+	fill := func(name, value string) {
+		if !declared[name] || value == "" {
+			return
+		}
+		for i := range params {
+			if params[i].Name == name {
+				if s, ok := params[i].Value.(string); ok && s == "" {
+					params[i].Value = value
+				}
+				return
+			}
+		}
+		params = append(params, apiParam{Name: name, Value: value})
+	}
+	fill("appid", creds.AppID)
+	fill("secret", creds.AppSecret)
+	return params
 }
 
 // sessionKeyOf reads the synthetic SessionKey field the generator adds to the
@@ -404,7 +493,11 @@ func (c *EndpointClient) buildUploadRequest(ctx context.Context, token, path str
 
 // do sends the request and returns the response bytes, turning a non-zero
 // errcode envelope into a classified error.
-func (c *EndpointClient) do(ctx context.Context, httpReq *http.Request) ([]byte, error) {
+//
+// The installed RequestModifiers may replace the response body before the errcode
+// envelope is inspected (see modifier.go), which is how the API security layer
+// verifies and decrypts an encrypted reply.
+func (c *EndpointClient) do(ctx context.Context, httpReq *http.Request, path string) ([]byte, error) {
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -416,6 +509,10 @@ func (c *EndpointClient) do(ctx context.Context, httpReq *http.Request) ([]byte,
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("wechat: unexpected HTTP status %d for %s %s", resp.StatusCode, httpReq.Method, httpReq.URL.Path)
+	}
+	info := RequestInfo{URLPath: c.baseURL + path, Path: path, Method: httpReq.Method, Credentials: c.Credentials()}
+	if data, err = c.modifyResponse(info, resp.Header, data); err != nil {
+		return nil, err
 	}
 	if bizErr := scanErrorBody(data); bizErr != nil {
 		return nil, bizErr
@@ -454,7 +551,7 @@ func (c *EndpointClient) send(ctx context.Context, method, path string, auth boo
 	if err != nil {
 		return nil, err
 	}
-	data, err := c.do(ctx, httpReq)
+	data, err := c.do(ctx, httpReq, path)
 	if err == nil || !auth || c.tokenFn != nil || !isNeedRetryError(err) {
 		attachErrDoc(err, errDocs)
 		return data, err
@@ -468,7 +565,7 @@ func (c *EndpointClient) send(ctx context.Context, method, path string, auth boo
 	if err != nil {
 		return nil, err
 	}
-	data, err = c.do(ctx, httpReq)
+	data, err = c.do(ctx, httpReq, path)
 	attachErrDoc(err, errDocs)
 	return data, err
 }
@@ -500,6 +597,9 @@ func CallBinary(c *EndpointClient, ctx context.Context, method, path string, req
 }
 
 // CallUpload executes one documented multipart/form-data upload endpoint.
+//
+// Uploads are not decorated: the documented API 二次加密 does not cover them,
+// so the body stays the multipart form the endpoint requires.
 func CallUpload(c *EndpointClient, ctx context.Context, path string, req any, file *Upload, errDocs map[int]ErrDoc, auth bool) ([]byte, error) {
 	return c.send(ctx, http.MethodPost, path, auth, func(token string) (*http.Request, error) {
 		return c.buildUploadRequest(ctx, token, path, req, file)

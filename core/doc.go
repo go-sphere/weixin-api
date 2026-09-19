@@ -21,6 +21,11 @@
 //   - message-callback crypto (signature verification and AES-CBC
 //     (de)encryption) and JS-SDK config signing, neither of which can be
 //     derived from the HTTP documentation;
+//   - the request/response decorator hook (RequestModifier, installed with
+//     Client.Use) and the optional API 二次加密和签名 layer built on it
+//     (APISecurity): AES-256-GCM body encryption with RSA-PSS request signing
+//     and platform-certificate response verification, applied to the endpoint
+//     paths the caller names;
 //   - a pluggable Cache interface with an in-process memory implementation.
 //
 // Callers normally use a platform package rather than this one directly; core

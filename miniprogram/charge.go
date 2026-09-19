@@ -26,11 +26,11 @@ var getWxaChargeUsageGetErrCodes = map[int]core.ErrDoc{
 // GetWxaChargeUsageGetRequest carries the documented parameters of one API call.
 type GetWxaChargeUsageGetRequest struct {
 	// 商品SPU ID
-	SpuID string `json:"spuId"`
+	SpuID string `query:"spuId"`
 	// 分页偏移量,从0开始
-	Offset int64 `json:"offset"`
+	Offset int64 `query:"offset"`
 	// 每页个数,最大20
-	Limit int64 `json:"limit"`
+	Limit int64 `query:"limit"`
 }
 
 // GetWxaChargeUsageGetResponse mirrors the documented response payload. Fields the docs do
@@ -102,7 +102,7 @@ var getWxaChargeUsageGetRecentAverageErrCodes = map[int]core.ErrDoc{
 // GetWxaChargeUsageGetRecentAverageRequest carries the documented parameters of one API call.
 type GetWxaChargeUsageGetRecentAverageRequest struct {
 	// 商品SPU ID
-	SpuID string `json:"spuId"`
+	SpuID string `query:"spuId"`
 }
 
 // GetWxaChargeUsageGetRecentAverageResponse mirrors the documented response payload. Fields the docs do

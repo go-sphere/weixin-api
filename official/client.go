@@ -28,6 +28,11 @@ type Config struct {
 	// Token overrides the AppID/AppSecret flow: when set it is called for every
 	// request and no token is cached or refreshed.
 	Token func(ctx context.Context) (string, error)
+	// Modifiers decorate outgoing requests and incoming responses. They are how
+	// optional layers that the endpoint documentation does not describe are
+	// installed, e.g. core.APISecurity for the API 二次加密和签名 protocol.
+	// Further modifiers can be added later with Client.Use.
+	Modifiers []core.RequestModifier
 	// Cache stores access tokens; nil creates an in-process memory cache.
 	Cache core.Cache
 	// Proxy is an optional HTTP(S) proxy URL for outbound requests.
@@ -51,6 +56,7 @@ func New(cfg Config) *Client {
 		AppKey:     cfg.AppKey,
 		Env:        cfg.Env,
 		Token:      cfg.Token,
+		Modifiers:  cfg.Modifiers,
 		Cache:      cfg.Cache,
 		Proxy:      cfg.Proxy,
 		BaseURL:    cfg.BaseURL,

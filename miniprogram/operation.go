@@ -492,25 +492,25 @@ var getWxaapiUserlogUserlogSearchErrCodes = map[int]core.ErrDoc{
 // GetWxaapiUserlogUserlogSearchRequest carries the documented parameters of one API call.
 type GetWxaapiUserlogUserlogSearchRequest struct {
 	// YYYYMMDD格式的日期,仅支持最近7天
-	Date string `json:"date"`
+	Date string `query:"date"`
 	// 开始时间,必须是 date 指定日期的时间
-	Begintime int64 `json:"begintime"`
+	Begintime int64 `query:"begintime"`
 	// 结束时间,必须是 date 指定日期的时间
-	Endtime int64 `json:"endtime"`
+	Endtime int64 `query:"endtime"`
 	// 开始返回的数据下标,用作分页,默认为0
-	Start int64 `json:"start,omitzero"`
+	Start int64 `query:"start,omitzero"`
 	// 返回的数据条数,用作分页,默认为20
-	Limit int64 `json:"limit,omitzero"`
+	Limit int64 `query:"limit,omitzero"`
 	// 小程序启动的唯一ID,按 TraceId 查询会展示该次小程序启动过程的所有页面的日志。
-	TraceID string `json:"traceId,omitempty"`
+	TraceID string `query:"traceId,omitempty"`
 	// 小程序页面路径,例如pages/index/index
-	URL string `json:"url,omitempty"`
+	URL string `query:"url,omitempty"`
 	// 用户微信号或者OpenId
-	ID string `json:"id,omitempty"`
+	ID string `query:"id,omitempty"`
 	// 开发者通过setFileterMsg/addFilterMsg指定的 filterMsg 字段
-	FilterMsg string `json:"filterMsg,omitempty"`
+	FilterMsg string `query:"filterMsg,omitempty"`
 	// 日志等级,返回大于等于 level 等级的日志,level的定义为2(Info)、4(Warn)、8(Error),如果指定为4,则返回大于等于4的日志,即返回 Warn 和Error日志
-	Level int64 `json:"level,omitzero"`
+	Level int64 `query:"level,omitzero"`
 }
 
 // GetWxaapiUserlogUserlogSearchResponse mirrors the documented response payload. Fields the docs do

@@ -53,11 +53,14 @@ func TestExtractOperations(t *testing.T) {
 	if op.Method != "GET" || op.Path != "/cgi-bin/token" {
 		t.Errorf("endpoint = %s %s", op.Method, op.Path)
 	}
-	if len(op.Query) != 2 || op.Query[0].Name != "access_token" || !op.Query[0].Required {
+	// The endpoint is a GET, so every documented parameter (including the one
+	// tabulated under 请求体) travels in the URL query: the runtime sends no
+	// body for GET, so a body-placed parameter would be dropped.
+	if len(op.Query) != 3 || op.Query[0].Name != "access_token" || !op.Query[0].Required {
 		t.Errorf("query = %+v", op.Query)
 	}
-	if len(op.Body) != 1 || op.Body[0].Name != "extra" {
-		t.Errorf("body = %+v", op.Body)
+	if len(op.Body) != 0 {
+		t.Errorf("body = %+v, want empty for a GET endpoint", op.Body)
 	}
 	if len(op.Response) != 1 || op.Response[0].Type != "string" {
 		t.Errorf("response = %+v", op.Response)
@@ -74,6 +77,191 @@ func TestExtractOperations(t *testing.T) {
 	if ops := parseOperations("https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/index.html", "小程序登录", content2); len(ops) != 0 {
 		t.Errorf("index page yielded %d ops, want 0", len(ops))
 	}
+}
+
+// A GET endpoint whose parameters the docs tabulate under 请求体 still travels
+// in the URL query, because the runtime builds no body for GET. The verb wins
+// over the section heading.
+func TestGETParametersMoveToQuery(t *testing.T) {
+	doc := wrapDoc(`<div class="content custom">
+<h1>检验登录态</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>GET https://api.weixin.qq.com/wxa/checksession?access_token=ACCESS_TOKEN</p>
+<h2>2. 请求参数</h2>
+<h3>查询参数 Query String Parameters</h3>
+<table><thead><tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+<tbody><tr><td>access_token</td><td>string</td><td>是</td><td>接口调用凭证</td></tr></tbody></table>
+<h3>请求体 Request Payload</h3>
+<table><thead><tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>openid</td><td>string</td><td>是</td><td>用户唯一标识符</td></tr>
+<tr><td>signature</td><td>string</td><td>是</td><td>用户登录态签名</td></tr>
+</tbody></table>
+</div>`)
+	_, _, _, content, err := parsePage([]byte(doc), "https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/api_checksessionkey.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops := parseOperations("https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/api_checksessionkey.html", "检验登录态", content)
+	if len(ops) != 1 {
+		t.Fatalf("ops = %d, want 1", len(ops))
+	}
+	op := ops[0]
+	if op.Method != "GET" {
+		t.Fatalf("method = %s, want GET", op.Method)
+	}
+	want := []string{"access_token", "openid", "signature"}
+	if len(op.Query) != len(want) {
+		t.Fatalf("query = %+v, want %d entries", op.Query, len(want))
+	}
+	for i, name := range want {
+		if op.Query[i].Name != name {
+			t.Errorf("query[%d] = %s, want %s", i, op.Query[i].Name, name)
+		}
+	}
+	if len(op.Body) != 0 {
+		t.Errorf("body = %+v, want empty", op.Body)
+	}
+}
+
+// A POST endpoint keeps its parameters in the body, and a page whose error
+// table demands POST is treated as POST even when the 调用方式 line says GET.
+func TestMethodCorrection(t *testing.T) {
+	postDoc := wrapDoc(`<div class="content custom">
+<h1>文本内容安全识别</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>POST https://api.weixin.qq.com/wxa/msg_sec_check?access_token=ACCESS_TOKEN</p>
+<h2>2. 请求参数</h2>
+<h3>请求体 Request Payload</h3>
+<table><thead><tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+<tbody><tr><td>content</td><td>string</td><td>是</td><td>文本内容</td></tr></tbody></table>
+</div>`)
+	_, _, _, content, err := parsePage([]byte(postDoc), "https://developers.weixin.qq.com/miniprogram/dev/server/API/sec-center/sec-check/api_msgseccheck.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops := parseOperations("https://developers.weixin.qq.com/miniprogram/dev/server/API/sec-center/sec-check/api_msgseccheck.html", "文本内容安全识别", content)
+	if len(ops) != 1 || ops[0].Method != "POST" {
+		t.Fatalf("ops = %+v, want one POST operation", ops)
+	}
+	if len(ops[0].Body) != 1 || len(ops[0].Query) != 0 {
+		t.Errorf("POST params should stay in the body: query=%+v body=%+v", ops[0].Query, ops[0].Body)
+	}
+
+	// The verb line says GET but the error table's 43002 ("HTTP请求必须使用POST方法")
+	// contradicts it; the endpoint must be POST with body parameters.
+	mismatch := wrapDoc(`<div class="content custom">
+<h1>增加剧目授权</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>GET https://api.weixin.qq.com/wxa/sec/vod/authorizedrama?access_token=ACCESS_TOKEN</p>
+<h2>2. 请求参数</h2>
+<h3>请求体 Request Payload</h3>
+<table><thead><tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+<tbody><tr><td>drama_id</td><td>numarray</td><td>是</td><td>授权的剧目ID</td></tr></tbody></table>
+<h2>6. 错误码</h2>
+<table><thead><tr><th>错误码</th><th>错误描述</th><th>解决方案</th></tr></thead>
+<tbody><tr><td>43002</td><td>HTTP请求必须使用POST方法</td><td></td></tr></tbody></table>
+</div>`)
+	_, _, _, content2, err := parsePage([]byte(mismatch), "https://developers.weixin.qq.com/miniprogram/dev/server/API/minidrama/authorizedrama/api_authorizedrama.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops2 := parseOperations("https://developers.weixin.qq.com/miniprogram/dev/server/API/minidrama/authorizedrama/api_authorizedrama.html", "增加剧目授权", content2)
+	if len(ops2) != 1 || ops2[0].Method != "POST" {
+		t.Fatalf("ops = %+v, want POST after the registered override", ops2)
+	}
+	if ops2[0].DocMethod != "GET" {
+		t.Errorf("DocMethod = %q, want the documented GET preserved for audit", ops2[0].DocMethod)
+	}
+	if len(ops2[0].Body) != 1 || ops2[0].Body[0].Name != "drama_id" {
+		t.Errorf("body = %+v, want the drama_id parameter", ops2[0].Body)
+	}
+	// A registered override must satisfy the contradiction check.
+	if err := validateMethodOverrides(ops2); err != nil {
+		t.Errorf("registered override should validate: %v", err)
+	}
+}
+
+// An unregistered page whose verb line contradicts its error table must fail the
+// pipeline loudly rather than be silently corrected, and a GET page without the
+// POST-required code must be left alone.
+func TestMethodOverrideValidation(t *testing.T) {
+	unregistered := wrapDoc(`<div class="content custom">
+<h1>未知接口</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>GET https://api.weixin.qq.com/wxa/unknown/contradiction?access_token=ACCESS_TOKEN</p>
+<h2>6. 错误码</h2>
+<table><thead><tr><th>错误码</th><th>错误描述</th><th>解决方案</th></tr></thead>
+<tbody><tr><td>43002</td><td>HTTP请求必须使用POST方法</td><td></td></tr></tbody></table>
+</div>`)
+	_, _, _, content, err := parsePage([]byte(unregistered), "https://x/unknown/api_contradiction.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops := parseOperations("https://x/unknown/api_contradiction.html", "未知接口", content)
+	if len(ops) != 1 {
+		t.Fatalf("ops = %+v, want 1", ops)
+	}
+	if ops[0].Method != "GET" {
+		t.Errorf("method = %q: an unregistered contradiction must keep the documented verb", ops[0].Method)
+	}
+	if err := validateMethodOverrides(ops); err == nil {
+		t.Error("an unregistered GET+43002 page must fail validation")
+	}
+
+	// No POST-required code: the GET verb stands and validation passes.
+	plain := wrapDoc(`<div class="content custom">
+<h1>获取回调IP</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>GET https://api.weixin.qq.com/cgi-bin/getcallbackip?access_token=ACCESS_TOKEN</p>
+<h2>6. 错误码</h2>
+<table><thead><tr><th>错误码</th><th>错误描述</th><th>解决方案</th></tr></thead>
+<tbody><tr><td>40013</td><td>invalid appid</td><td></td></tr></tbody></table>
+</div>`)
+	_, _, _, content2, err := parsePage([]byte(plain), "https://x/base/api_getcallbackip.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops2 := parseOperations("https://x/base/api_getcallbackip.html", "获取回调IP", content2)
+	if len(ops2) != 1 || ops2[0].Method != "GET" {
+		t.Fatalf("ops = %+v, want an untouched GET", ops2)
+	}
+	if err := validateMethodOverrides(ops2); err != nil {
+		t.Errorf("a GET without 43002 must pass validation: %v", err)
+	}
+}
+
+// collectOperations must surface an unregistered contradiction as an error, so
+// the generation stages cannot ship a guessed verb.
+func TestCollectOperationsRejectsContradiction(t *testing.T) {
+	doc := wrapDoc(`<div class="content custom">
+<h1>未知接口</h1>
+<h2>1. 调用方式</h2>
+<h3>HTTPS 调用</h3>
+<p>GET https://api.weixin.qq.com/wxa/unknown/contradiction?access_token=ACCESS_TOKEN</p>
+<h2>6. 错误码</h2>
+<table><thead><tr><th>错误码</th><th>错误描述</th><th>解决方案</th></tr></thead>
+<tbody><tr><td>43002</td><td>HTTP请求必须使用POST方法</td><td></td></tr></tbody></table>
+</div>`)
+	contradiction := mustParsePage(t, doc, "https://x/unknown/api_contradiction.html")
+	if _, err := collectOperations(map[string]*page{"https://x/unknown/api_contradiction.html": contradiction}); err == nil {
+		t.Fatal("collectOperations must reject an unregistered GET+43002 contradiction")
+	}
+}
+
+// mustParsePage is a small helper for tests that need a *page.
+func mustParsePage(t *testing.T, doc, url string) *page {
+	t.Helper()
+	title, _, _, content, err := parsePage([]byte(doc), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &page{Canonical: url, Title: title, Ops: parseOperations(url, title, content)}
 }
 
 func TestGoNameForEndpoint(t *testing.T) {

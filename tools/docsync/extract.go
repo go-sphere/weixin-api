@@ -6,6 +6,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -18,7 +19,8 @@ import (
 type Operation struct {
 	ID             string   // stable Go identifier, e.g. GetCgiBinToken
 	Tree           string   // documentation tree: miniprogram | service | subscription
-	Method         string   // HTTP verb
+	Method         string   // effective HTTP verb (may be corrected by methodOverrides)
+	DocMethod      string   // HTTP verb exactly as the 调用方式 line states it
 	Path           string   // request path, e.g. /cgi-bin/stable_token
 	Summary        string   // Chinese title of the doc page
 	Page           string   // canonical doc page URL
@@ -662,11 +664,12 @@ func extractOperations(pageURL, title string, root *Section) []*Operation {
 	}
 
 	op := &Operation{
-		ID:      "", // assigned by the caller's name assigner
-		Method:  method,
-		Path:    path,
-		Summary: asciiText(title),
-		Page:    pageURL,
+		ID:        "", // assigned by the caller's name assigner
+		Method:    method,
+		DocMethod: method,
+		Path:      path,
+		Summary:   asciiText(title),
+		Page:      pageURL,
 	}
 	if paramSec != nil {
 		bodyDefs := collectObjectDefs(paramSec, bodyPrefix)
@@ -719,6 +722,19 @@ func extractOperations(pageURL, title string, root *Section) []*Operation {
 	}
 	op.Body = kept
 
+	// The effective HTTP verb decides where parameters travel: a GET carries
+	// them in the URL query. A number of pages nonetheless tabulate a GET
+	// endpoint's parameters under "请求体" (Request Payload), which would send
+	// them nowhere, because the runtime builds no body for GET. Normalise by
+	// verb so parameter placement always follows the method actually called.
+	// A registered methodOverrides entry can flip the verb; contradictions on
+	// unregistered pages are reported by validateMethodOverrides instead.
+	op.Method = correctedMethod(op)
+	if op.Method == methodGet {
+		op.Query = dedupeFields(append(op.Query, op.Body...))
+		op.Body = nil
+	}
+
 	// access_token is documented either as a query parameter or inline in the
 	// 调用方式 URL; endpoints authenticating another way (appid+secret) have
 	// neither, and must not be sent a token.
@@ -741,6 +757,64 @@ func extractOperations(pageURL, title string, root *Section) []*Operation {
 // return raw bytes on success and a JSON error envelope on failure (mini
 // program code images, media downloads).
 const binaryResponseMarker = "二进制内容"
+
+// HTTP verbs, as the documentation spells them in the 调用方式 section.
+const (
+	methodGet  = "GET"
+	methodPost = "POST"
+)
+
+// postRequiredErrCode is the documented error returned when a request uses the
+// wrong verb: "HTTP请求必须使用POST方法".
+const postRequiredErrCode = 43002
+
+// methodOverrides corrects the documented verb for pages whose 调用方式 line
+// contradicts the rest of the page. Each entry is reviewed by hand and carries
+// its justification, so the correction stays auditable instead of relying on a
+// generic error code to make the decision silently.
+var methodOverrides = map[string]string{
+	// The page says GET, but its 请求参数 section is a JSON object (drama_id is
+	// an array, which cannot ride a query string), its error table returns 43002
+	// "HTTP请求必须使用POST方法", and every sibling under /wxa/sec/vod/ is POST.
+	"/wxa/sec/vod/authorizedrama": methodPost,
+}
+
+// correctedMethod resolves the effective HTTP verb of an endpoint: a registered
+// override wins, otherwise the 调用方式 line is authoritative. Contradictions are
+// not resolved here; validateMethodOverrides reports them so the decision stays
+// explicit.
+func correctedMethod(op *Operation) string {
+	if override, ok := methodOverrides[op.Path]; ok {
+		return override
+	}
+	return op.Method
+}
+
+// validateMethodOverrides fails when a page documents GET but its error table
+// requires POST without a registered override. Resolving that silently would
+// turn a documentation contradiction into a guessed API shape, so the run stops
+// and asks a maintainer to review the page.
+func validateMethodOverrides(ops []*Operation) error {
+	var problems []string
+	for _, op := range ops {
+		if op.DocMethod != methodGet {
+			continue
+		}
+		if _, ok := methodOverrides[op.Path]; ok {
+			continue
+		}
+		if !slices.ContainsFunc(op.Errors, func(e ErrRow) bool { return e.Code == strconv.Itoa(postRequiredErrCode) }) {
+			continue
+		}
+		problems = append(problems, op.Method+" "+op.Path)
+	}
+	if len(problems) == 0 {
+		return nil
+	}
+	slices.Sort(problems)
+	return fmt.Errorf("documented GET but error table requires POST (%d) for %s; review the page(s) and register the verb in methodOverrides",
+		postRequiredErrCode, strings.Join(problems, ", "))
+}
 
 // isBinaryResponseDoc reports whether the page declares a raw-bytes success
 // payload.
@@ -1023,8 +1097,10 @@ func compareOperations(a, b *Operation) int {
 
 // collectOperations gathers the operations of all crawled pages, dropping
 // duplicates (the same endpoint documented twice in one tree) and ordering
-// the result deterministically by path then method.
-func collectOperations(pages map[string]*page) []*Operation {
+// the result deterministically by path then method. It fails when a page's
+// documented verb contradicts its own error table without a registered
+// override, so a new contradiction surfaces instead of being guessed at.
+func collectOperations(pages map[string]*page) ([]*Operation, error) {
 	seen := make(map[string]bool)
 	var ops []*Operation
 	for _, url := range slices.Sorted(maps.Keys(pages)) {
@@ -1038,7 +1114,10 @@ func collectOperations(pages map[string]*page) []*Operation {
 		}
 	}
 	slices.SortFunc(ops, compareOperations)
-	return ops
+	if err := validateMethodOverrides(ops); err != nil {
+		return nil, err
+	}
+	return ops, nil
 }
 
 // treeOps is one generated package together with the operations that belong

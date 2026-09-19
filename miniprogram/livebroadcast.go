@@ -1391,7 +1391,7 @@ var getWxaapiBroadcastRoomGetassistantlistErrCodes = map[int]core.ErrDoc{-1: {
 // GetWxaapiBroadcastRoomGetassistantlistRequest carries the documented parameters of one API call.
 type GetWxaapiBroadcastRoomGetassistantlistRequest struct {
 	// 房间ID
-	RoomID int64 `json:"roomId"`
+	RoomID int64 `query:"roomId"`
 }
 
 // GetWxaapiBroadcastRoomGetassistantlistResponse mirrors the documented response payload. Fields the docs do
@@ -1451,7 +1451,7 @@ var getWxaapiBroadcastRoomGetpushurlErrCodes = map[int]core.ErrDoc{
 // GetWxaapiBroadcastRoomGetpushurlRequest carries the documented parameters of one API call.
 type GetWxaapiBroadcastRoomGetpushurlRequest struct {
 	// 房间ID
-	RoomID int64 `json:"roomId"`
+	RoomID int64 `query:"roomId"`
 }
 
 // GetWxaapiBroadcastRoomGetpushurlResponse mirrors the documented response payload. Fields the docs do
@@ -1493,9 +1493,9 @@ var getWxaapiBroadcastRoomGetsharedcodeErrCodes = map[int]core.ErrDoc{
 // GetWxaapiBroadcastRoomGetsharedcodeRequest carries the documented parameters of one API call.
 type GetWxaapiBroadcastRoomGetsharedcodeRequest struct {
 	// 房间ID
-	RoomID int64 `json:"roomId"`
+	RoomID int64 `query:"roomId"`
 	// 自定义参数
-	Params string `json:"params,omitempty"`
+	Params string `query:"params,omitempty"`
 }
 
 // GetWxaapiBroadcastRoomGetsharedcodeResponse mirrors the documented response payload. Fields the docs do
@@ -1525,7 +1525,7 @@ var getWxaapiBroadcastRoomGetsubanchorErrCodes = map[int]core.ErrDoc{-1: {
 // GetWxaapiBroadcastRoomGetsubanchorRequest carries the documented parameters of one API call.
 type GetWxaapiBroadcastRoomGetsubanchorRequest struct {
 	// 房间ID
-	RoomID int64 `json:"roomId"`
+	RoomID int64 `query:"roomId"`
 }
 
 // GetWxaapiBroadcastRoomGetsubanchorResponse mirrors the documented response payload. Fields the docs do

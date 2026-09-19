@@ -670,13 +670,6 @@ components:
           type: integer
       type: object
     GetWxaGetMerchantAuditInfoRequest:
-      properties:
-        audit_id:
-          description: 审核单id
-          format: int64
-          type: integer
-      required:
-      - audit_id
       type: object
     GetWxaGetMerchantAuditInfoResponse:
       properties:
@@ -15992,13 +15985,13 @@ paths:
         required: true
         schema:
           type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GetWxaGetMerchantAuditInfoRequest'
-        description: 请求体
+      - description: 审核单id
+        in: query
+        name: audit_id
         required: true
+        schema:
+          format: int64
+          type: integer
       responses:
         "200":
           content:

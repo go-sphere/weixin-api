@@ -349,7 +349,7 @@ var getWxaGetMerchantAuditInfoErrCodes = map[int]core.ErrDoc{40001: {
 // GetWxaGetMerchantAuditInfoRequest carries the documented parameters of one API call.
 type GetWxaGetMerchantAuditInfoRequest struct {
 	// 审核单id
-	AuditID int64 `json:"audit_id"`
+	AuditID int64 `query:"audit_id"`
 }
 
 // GetWxaGetMerchantAuditInfoResponse mirrors the documented response payload. Fields the docs do

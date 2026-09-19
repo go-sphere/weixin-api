@@ -544,7 +544,7 @@ func (c *Client) PostWxaSecVodAuthorizecopyright(ctx context.Context, req *PostW
 	return core.Call[PostWxaSecVodAuthorizecopyrightResponse](c.EndpointClient, ctx, "POST", "/wxa/sec/vod/authorizecopyright", req, postWxaSecVodAuthorizecopyrightErrCodes, true, core.SignNone)
 }
 
-var getWxaSecVodAuthorizedramaErrCodes = map[int]core.ErrDoc{
+var postWxaSecVodAuthorizedramaErrCodes = map[int]core.ErrDoc{
 	-1: {
 		Desc:     "系统错误",
 		Solution: "",
@@ -627,10 +627,10 @@ var getWxaSecVodAuthorizedramaErrCodes = map[int]core.ErrDoc{
 	},
 }
 
-// GetWxaSecVodAuthorizedrama 增加剧目授权 (GET /wxa/sec/vod/authorizedrama)
+// PostWxaSecVodAuthorizedrama 增加剧目授权 (POST /wxa/sec/vod/authorizedrama)
 // Doc: https://developers.weixin.qq.com/miniprogram/dev/server/API/minidrama/authorizedrama/api_authorizedrama.html
-// GetWxaSecVodAuthorizedramaRequest carries the documented parameters of one API call.
-type GetWxaSecVodAuthorizedramaRequest struct {
+// PostWxaSecVodAuthorizedramaRequest carries the documented parameters of one API call.
+type PostWxaSecVodAuthorizedramaRequest struct {
 	// 授权的剧目ID
 	DramaID []int64 `json:"drama_id"`
 	// 被授权方小程序id。
@@ -639,19 +639,19 @@ type GetWxaSecVodAuthorizedramaRequest struct {
 	AuthzExpireTime int64 `json:"authz_expire_time,omitzero"`
 }
 
-// GetWxaSecVodAuthorizedramaResponse mirrors the documented response payload. Fields the docs do
+// PostWxaSecVodAuthorizedramaResponse mirrors the documented response payload. Fields the docs do
 // not tabulate are not present; extend the struct as needed.
-type GetWxaSecVodAuthorizedramaResponse struct {
+type PostWxaSecVodAuthorizedramaResponse struct {
 	// 错误码
 	Errcode int64 `json:"errcode,omitzero"`
 	// 错误信息
 	Errmsg string `json:"errmsg,omitempty"`
 	// 剧目的授权结果。
-	Result []*GetWxaSecVodAuthorizedramaResponseResultObject `json:"result,omitempty"`
+	Result []*PostWxaSecVodAuthorizedramaResponseResultObject `json:"result,omitempty"`
 }
 
-// GetWxaSecVodAuthorizedramaResponseResultObject is a documented nested object.
-type GetWxaSecVodAuthorizedramaResponseResultObject struct {
+// PostWxaSecVodAuthorizedramaResponseResultObject is a documented nested object.
+type PostWxaSecVodAuthorizedramaResponseResultObject struct {
 	// 剧目ID。
 	DramaID int64 `json:"drama_id,omitzero"`
 	// 错误码。
@@ -660,8 +660,8 @@ type GetWxaSecVodAuthorizedramaResponseResultObject struct {
 	Errmsg string `json:"errmsg,omitempty"`
 }
 
-func (c *Client) GetWxaSecVodAuthorizedrama(ctx context.Context, req *GetWxaSecVodAuthorizedramaRequest) (*GetWxaSecVodAuthorizedramaResponse, error) {
-	return core.Call[GetWxaSecVodAuthorizedramaResponse](c.EndpointClient, ctx, "GET", "/wxa/sec/vod/authorizedrama", req, getWxaSecVodAuthorizedramaErrCodes, true, core.SignNone)
+func (c *Client) PostWxaSecVodAuthorizedrama(ctx context.Context, req *PostWxaSecVodAuthorizedramaRequest) (*PostWxaSecVodAuthorizedramaResponse, error) {
+	return core.Call[PostWxaSecVodAuthorizedramaResponse](c.EndpointClient, ctx, "POST", "/wxa/sec/vod/authorizedrama", req, postWxaSecVodAuthorizedramaErrCodes, true, core.SignNone)
 }
 
 var postWxaSecVodCommituploadErrCodes = map[int]core.ErrDoc{

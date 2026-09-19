@@ -92,7 +92,7 @@ var getWxaapiCommentCommentinfoGetErrCodes = map[int]core.ErrDoc{
 // GetWxaapiCommentCommentinfoGetRequest carries the documented parameters of one API call.
 type GetWxaapiCommentCommentinfoGetRequest struct {
 	// 评价的 id
-	CommentID string `json:"commentId"`
+	CommentID string `query:"commentId"`
 }
 
 // GetWxaapiCommentCommentinfoGetResponse mirrors the documented response payload. Fields the docs do
@@ -406,15 +406,15 @@ var getWxaapiCommentMpcommentlistGetErrCodes = map[int]core.ErrDoc{
 // GetWxaapiCommentMpcommentlistGetRequest carries the documented parameters of one API call.
 type GetWxaapiCommentMpcommentlistGetRequest struct {
 	// 查询时间段的开始时间
-	StartTime string `json:"startTime"`
+	StartTime string `query:"startTime"`
 	// 查询时间段的结束时间
-	EndTime string `json:"endTime"`
+	EndTime string `query:"endTime"`
 	// 过滤的数据类型
-	FilterType int64 `json:"filterType,omitzero"`
+	FilterType int64 `query:"filterType,omitzero"`
 	// 查询的偏移数(从offset开始计数拉取),默认值为 0 代表首页拉取
-	Offset int64 `json:"offset,omitzero"`
+	Offset int64 `query:"offset,omitzero"`
 	// 查询每页中的数量,默认值为 8
-	Limit int64 `json:"limit,omitzero"`
+	Limit int64 `query:"limit,omitzero"`
 }
 
 // GetWxaapiCommentMpcommentlistGetResponse mirrors the documented response payload. Fields the docs do
@@ -600,7 +600,7 @@ var getWxaapiCommentReplyandcommentreplylistGetErrCodes = map[int]core.ErrDoc{
 // GetWxaapiCommentReplyandcommentreplylistGetRequest carries the documented parameters of one API call.
 type GetWxaapiCommentReplyandcommentreplylistGetRequest struct {
 	// 评价的 id
-	CommentID string `json:"commentId"`
+	CommentID string `query:"commentId"`
 }
 
 // GetWxaapiCommentReplyandcommentreplylistGetResponse mirrors the documented response payload. Fields the docs do
@@ -878,7 +878,7 @@ var getWxaapiMinishopComplaintorderdetailErrCodes = map[int]core.ErrDoc{-1: {
 // GetWxaapiMinishopComplaintorderdetailRequest carries the documented parameters of one API call.
 type GetWxaapiMinishopComplaintorderdetailRequest struct {
 	// 订单id
-	ComplaintOrderID string `json:"complaintOrderId"`
+	ComplaintOrderID string `query:"complaintOrderId"`
 }
 
 // GetWxaapiMinishopComplaintorderdetailResponse mirrors the documented response payload. Fields the docs do
@@ -1013,9 +1013,9 @@ var getWxaapiWxamptradeGetPenaltyListErrCodes = map[int]core.ErrDoc{
 // GetWxaapiWxamptradeGetPenaltyListRequest carries the documented parameters of one API call.
 type GetWxaapiWxamptradeGetPenaltyListRequest struct {
 	// 获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过总记录数
-	Offset int64 `json:"offset"`
+	Offset int64 `query:"offset"`
 	// 获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过 100
-	Limit int64 `json:"limit"`
+	Limit int64 `query:"limit"`
 }
 
 // GetWxaapiWxamptradeGetPenaltyListResponse mirrors the documented response payload. Fields the docs do

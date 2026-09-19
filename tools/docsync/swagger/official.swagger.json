@@ -921,16 +921,6 @@
         "type": "object"
       },
       "GetWxaGetMerchantAuditInfoRequest": {
-        "properties": {
-          "audit_id": {
-            "description": "审核单id",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "audit_id"
-        ],
         "type": "object"
       },
       "GetWxaGetMerchantAuditInfoResponse": {
@@ -23644,19 +23634,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "审核单id",
+            "in": "query",
+            "name": "audit_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaGetMerchantAuditInfoRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {

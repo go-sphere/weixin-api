@@ -78,11 +78,11 @@ var getWxaChecksessionErrCodes = map[int]core.ErrDoc{
 // GetWxaChecksessionRequest carries the documented parameters of one API call.
 type GetWxaChecksessionRequest struct {
 	// 用户唯一标识符
-	OpenID string `json:"openid"`
+	OpenID string `query:"openid"`
 	// 用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, "")
-	Signature string `json:"signature"`
+	Signature string `query:"signature"`
 	// 用户登录态签名的哈希方法,目前只支持 hmac_sha256
-	SigMethod string `json:"sig_method"`
+	SigMethod string `query:"sig_method"`
 }
 
 // GetWxaChecksessionResponse mirrors the documented response payload. Fields the docs do
@@ -130,11 +130,11 @@ var getWxaResetusersessionkeyErrCodes = map[int]core.ErrDoc{
 // GetWxaResetusersessionkeyRequest carries the documented parameters of one API call.
 type GetWxaResetusersessionkeyRequest struct {
 	// 用户唯一标识符
-	OpenID string `json:"openid"`
+	OpenID string `query:"openid"`
 	// 用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, "")
-	Signature string `json:"signature"`
+	Signature string `query:"signature"`
 	// 用户登录态签名的哈希方法,目前只支持 hmac_sha256
-	SigMethod string `json:"sig_method"`
+	SigMethod string `query:"sig_method"`
 }
 
 // GetWxaResetusersessionkeyResponse mirrors the documented response payload. Fields the docs do

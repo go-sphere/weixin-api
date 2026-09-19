@@ -152,7 +152,11 @@ func run() int {
 		fmt.Printf("docsync: loaded %d cached page(s) from %s (IGNORE_CACHE=1 to re-crawl)\n", len(pages), cacheRoot)
 	}
 
-	ops := collectOperations(pages)
+	ops, err := collectOperations(pages)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docsync:", err)
+		return exitError
+	}
 	if *llmFallback {
 		ops, err = refineWithLLM(ctx, pages, ops)
 		if err != nil {

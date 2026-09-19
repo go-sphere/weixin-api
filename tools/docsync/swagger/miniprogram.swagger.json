@@ -547,15 +547,6 @@
         "type": "object"
       },
       "GetWxaChargeUsageGetRecentAverageRequest": {
-        "properties": {
-          "spuId": {
-            "description": "商品SPU ID",
-            "type": "string"
-          }
-        },
-        "required": [
-          "spuId"
-        ],
         "type": "object"
       },
       "GetWxaChargeUsageGetRecentAverageResponse": {
@@ -578,27 +569,6 @@
         "type": "object"
       },
       "GetWxaChargeUsageGetRequest": {
-        "properties": {
-          "limit": {
-            "description": "每页个数,最大20",
-            "format": "int64",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "分页偏移量,从0开始",
-            "format": "int64",
-            "type": "integer"
-          },
-          "spuId": {
-            "description": "商品SPU ID",
-            "type": "string"
-          }
-        },
-        "required": [
-          "limit",
-          "offset",
-          "spuId"
-        ],
         "type": "object"
       },
       "GetWxaChargeUsageGetResponse": {
@@ -692,25 +662,6 @@
         "type": "object"
       },
       "GetWxaChecksessionRequest": {
-        "properties": {
-          "openid": {
-            "description": "用户唯一标识符",
-            "type": "string"
-          },
-          "sig_method": {
-            "description": "用户登录态签名的哈希方法,目前只支持 hmac_sha256",
-            "type": "string"
-          },
-          "signature": {
-            "description": "用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, \"\")",
-            "type": "string"
-          }
-        },
-        "required": [
-          "openid",
-          "sig_method",
-          "signature"
-        ],
         "type": "object"
       },
       "GetWxaChecksessionResponse": {
@@ -774,27 +725,6 @@
         "type": "object"
       },
       "GetWxaGetpaidunionidRequest": {
-        "properties": {
-          "mch_id": {
-            "description": "微信支付分配的 商户号 ,和商户订单号配合使用",
-            "type": "string"
-          },
-          "openid": {
-            "description": "支付用户唯一标识",
-            "type": "string"
-          },
-          "out_trade_no": {
-            "description": "微信支付商户订单号 ,和商户号配合使用",
-            "type": "string"
-          },
-          "transaction_id": {
-            "description": "微信支付订单号",
-            "type": "string"
-          }
-        },
-        "required": [
-          "openid"
-        ],
         "type": "object"
       },
       "GetWxaGetpaidunionidResponse": {
@@ -816,25 +746,6 @@
         "type": "object"
       },
       "GetWxaResetusersessionkeyRequest": {
-        "properties": {
-          "openid": {
-            "description": "用户唯一标识符",
-            "type": "string"
-          },
-          "sig_method": {
-            "description": "用户登录态签名的哈希方法,目前只支持 hmac_sha256",
-            "type": "string"
-          },
-          "signature": {
-            "description": "用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, \"\")",
-            "type": "string"
-          }
-        },
-        "required": [
-          "openid",
-          "sig_method",
-          "signature"
-        ],
         "type": "object"
       },
       "GetWxaResetusersessionkeyResponse": {
@@ -855,68 +766,6 @@
           "session_key": {
             "description": "重置后的用户登录态",
             "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "GetWxaSecVodAuthorizedramaRequest": {
-        "properties": {
-          "authorized": {
-            "description": "被授权方小程序id。",
-            "type": "string"
-          },
-          "authz_expire_time": {
-            "description": "不传或者传0,表示永久有效;否则表示授权到期的时间戳",
-            "format": "int64",
-            "type": "integer"
-          },
-          "drama_id": {
-            "description": "授权的剧目ID",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "authorized",
-          "drama_id"
-        ],
-        "type": "object"
-      },
-      "GetWxaSecVodAuthorizedramaResponse": {
-        "properties": {
-          "errcode": {
-            "description": "错误码",
-            "format": "int64",
-            "type": "integer"
-          },
-          "errmsg": {
-            "description": "错误信息",
-            "type": "string"
-          },
-          "result": {
-            "description": "剧目的授权结果。",
-            "items": {
-              "properties": {
-                "drama_id": {
-                  "description": "剧目ID。",
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "errcode": {
-                  "description": "错误码。",
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "errmsg": {
-                  "description": "错误原因。",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
           }
         },
         "type": "object"
@@ -1057,16 +906,6 @@
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetassistantlistRequest": {
-        "properties": {
-          "roomId": {
-            "description": "房间ID",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "roomId"
-        ],
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetassistantlistResponse": {
@@ -1124,16 +963,6 @@
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetpushurlRequest": {
-        "properties": {
-          "roomId": {
-            "description": "房间ID",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "roomId"
-        ],
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetpushurlResponse": {
@@ -1155,20 +984,6 @@
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetsharedcodeRequest": {
-        "properties": {
-          "params": {
-            "description": "自定义参数",
-            "type": "string"
-          },
-          "roomId": {
-            "description": "房间ID",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "roomId"
-        ],
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetsharedcodeResponse": {
@@ -1194,16 +1009,6 @@
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetsubanchorRequest": {
-        "properties": {
-          "roomId": {
-            "description": "房间ID",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "roomId"
-        ],
         "type": "object"
       },
       "GetWxaapiBroadcastRoomGetsubanchorResponse": {
@@ -1225,15 +1030,6 @@
         "type": "object"
       },
       "GetWxaapiCommentCommentinfoGetRequest": {
-        "properties": {
-          "commentId": {
-            "description": "评价的 id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "commentId"
-        ],
         "type": "object"
       },
       "GetWxaapiCommentCommentinfoGetResponse": {
@@ -1479,35 +1275,6 @@
         "type": "object"
       },
       "GetWxaapiCommentMpcommentlistGetRequest": {
-        "properties": {
-          "endTime": {
-            "description": "查询时间段的结束时间",
-            "type": "string"
-          },
-          "filterType": {
-            "description": "过滤的数据类型",
-            "format": "int64",
-            "type": "integer"
-          },
-          "limit": {
-            "description": "查询每页中的数量,默认值为 8",
-            "format": "int64",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "查询的偏移数(从offset开始计数拉取),默认值为 0 代表首页拉取",
-            "format": "int64",
-            "type": "integer"
-          },
-          "startTime": {
-            "description": "查询时间段的开始时间",
-            "type": "string"
-          }
-        },
-        "required": [
-          "endTime",
-          "startTime"
-        ],
         "type": "object"
       },
       "GetWxaapiCommentMpcommentlistGetResponse": {
@@ -1593,15 +1360,6 @@
         "type": "object"
       },
       "GetWxaapiCommentReplyandcommentreplylistGetRequest": {
-        "properties": {
-          "commentId": {
-            "description": "评价的 id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "commentId"
-        ],
         "type": "object"
       },
       "GetWxaapiCommentReplyandcommentreplylistGetResponse": {
@@ -1845,15 +1603,6 @@
         "type": "object"
       },
       "GetWxaapiMinishopComplaintorderdetailRequest": {
-        "properties": {
-          "complaintOrderId": {
-            "description": "订单id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "complaintOrderId"
-        ],
         "type": "object"
       },
       "GetWxaapiMinishopComplaintorderdetailResponse": {
@@ -2208,58 +1957,6 @@
         "type": "object"
       },
       "GetWxaapiUserlogUserlogSearchRequest": {
-        "properties": {
-          "begintime": {
-            "description": "开始时间,必须是 date 指定日期的时间",
-            "format": "int64",
-            "type": "integer"
-          },
-          "date": {
-            "description": "YYYYMMDD格式的日期,仅支持最近7天",
-            "type": "string"
-          },
-          "endtime": {
-            "description": "结束时间,必须是 date 指定日期的时间",
-            "format": "int64",
-            "type": "integer"
-          },
-          "filterMsg": {
-            "description": "开发者通过setFileterMsg/addFilterMsg指定的 filterMsg 字段",
-            "type": "string"
-          },
-          "id": {
-            "description": "用户微信号或者OpenId",
-            "type": "string"
-          },
-          "level": {
-            "description": "日志等级,返回大于等于 level 等级的日志,level的定义为2(Info)、4(Warn)、8(Error),如果指定为4,则返回大于等于4的日志,即返回 Warn 和Error日志",
-            "format": "int64",
-            "type": "integer"
-          },
-          "limit": {
-            "description": "返回的数据条数,用作分页,默认为20",
-            "format": "int64",
-            "type": "integer"
-          },
-          "start": {
-            "description": "开始返回的数据下标,用作分页,默认为0",
-            "format": "int64",
-            "type": "integer"
-          },
-          "traceId": {
-            "description": "小程序启动的唯一ID,按 TraceId 查询会展示该次小程序启动过程的所有页面的日志。",
-            "type": "string"
-          },
-          "url": {
-            "description": "小程序页面路径,例如pages/index/index",
-            "type": "string"
-          }
-        },
-        "required": [
-          "begintime",
-          "date",
-          "endtime"
-        ],
         "type": "object"
       },
       "GetWxaapiUserlogUserlogSearchResponse": {
@@ -2366,22 +2063,6 @@
         "type": "object"
       },
       "GetWxaapiWxamptradeGetPenaltyListRequest": {
-        "properties": {
-          "limit": {
-            "description": "获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过 100",
-            "format": "int64",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过总记录数",
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "limit",
-          "offset"
-        ],
         "type": "object"
       },
       "GetWxaapiWxamptradeGetPenaltyListResponse": {
@@ -21087,6 +20768,68 @@
                 },
                 "errmsg": {
                   "description": "该剧目授权时的错误原因",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PostWxaSecVodAuthorizedramaRequest": {
+        "properties": {
+          "authorized": {
+            "description": "被授权方小程序id。",
+            "type": "string"
+          },
+          "authz_expire_time": {
+            "description": "不传或者传0,表示永久有效;否则表示授权到期的时间戳",
+            "format": "int64",
+            "type": "integer"
+          },
+          "drama_id": {
+            "description": "授权的剧目ID",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "authorized",
+          "drama_id"
+        ],
+        "type": "object"
+      },
+      "PostWxaSecVodAuthorizedramaResponse": {
+        "properties": {
+          "errcode": {
+            "description": "错误码",
+            "format": "int64",
+            "type": "integer"
+          },
+          "errmsg": {
+            "description": "错误信息",
+            "type": "string"
+          },
+          "result": {
+            "description": "剧目的授权结果。",
+            "items": {
+              "properties": {
+                "drama_id": {
+                  "description": "剧目ID。",
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "errcode": {
+                  "description": "错误码。",
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "errmsg": {
+                  "description": "错误原因。",
                   "type": "string"
                 }
               },
@@ -49006,19 +48749,37 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaChargeUsageGetRequest"
-              }
+          },
+          {
+            "description": "每页个数,最大20",
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "分页偏移量,从0开始",
+            "in": "query",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "商品SPU ID",
+            "in": "query",
+            "name": "spuId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -49057,19 +48818,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "商品SPU ID",
+            "in": "query",
+            "name": "spuId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaChargeUsageGetRecentAverageRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -49112,19 +48871,35 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaChecksessionRequest"
-              }
+          },
+          {
+            "description": "用户唯一标识符",
+            "in": "query",
+            "name": "openid",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "用户登录态签名的哈希方法,目前只支持 hmac_sha256",
+            "in": "query",
+            "name": "sig_method",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, \"\")",
+            "in": "query",
+            "name": "signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -49945,19 +49720,41 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaGetpaidunionidRequest"
-              }
+          },
+          {
+            "description": "微信支付分配的 商户号 ,和商户订单号配合使用",
+            "in": "query",
+            "name": "mch_id",
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "支付用户唯一标识",
+            "in": "query",
+            "name": "openid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "微信支付商户订单号 ,和商户号配合使用",
+            "in": "query",
+            "name": "out_trade_no",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "微信支付订单号",
+            "in": "query",
+            "name": "transaction_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -50897,19 +50694,35 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaResetusersessionkeyRequest"
-              }
+          },
+          {
+            "description": "用户唯一标识符",
+            "in": "query",
+            "name": "openid",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "用户登录态签名的哈希方法,目前只支持 hmac_sha256",
+            "in": "query",
+            "name": "sig_method",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "用户登录态签名,用session_key对空字符串签名得到的结果。即 signature = hmac_sha256(session_key, \"\")",
+            "in": "query",
+            "name": "signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -52795,9 +52608,9 @@
       }
     },
     "/wxa/sec/vod/authorizedrama": {
-      "get": {
+      "post": {
         "description": "Doc: https://developers.weixin.qq.com/miniprogram/dev/server/API/minidrama/authorizedrama/api_authorizedrama.html",
-        "operationId": "GetWxaSecVodAuthorizedrama",
+        "operationId": "PostWxaSecVodAuthorizedrama",
         "parameters": [
           {
             "description": "接口调用凭证,可使用 access_token 、 authorizer_access_token",
@@ -52813,7 +52626,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/GetWxaSecVodAuthorizedramaRequest"
+                "$ref": "#/components/schemas/PostWxaSecVodAuthorizedramaRequest"
               }
             }
           },
@@ -52825,7 +52638,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetWxaSecVodAuthorizedramaResponse"
+                  "$ref": "#/components/schemas/PostWxaSecVodAuthorizedramaResponse"
                 }
               }
             },
@@ -58046,19 +57859,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "房间ID",
+            "in": "query",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiBroadcastRoomGetassistantlistRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -58094,19 +57906,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "房间ID",
+            "in": "query",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiBroadcastRoomGetpushurlRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -58155,19 +57966,26 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiBroadcastRoomGetsharedcodeRequest"
-              }
+          },
+          {
+            "description": "自定义参数",
+            "in": "query",
+            "name": "params",
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "房间ID",
+            "in": "query",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -58215,19 +58033,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "房间ID",
+            "in": "query",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiBroadcastRoomGetsubanchorRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -58671,19 +58488,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "评价的 id",
+            "in": "query",
+            "name": "commentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiCommentCommentinfoGetRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -58939,19 +58754,53 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiCommentMpcommentlistGetRequest"
-              }
+          },
+          {
+            "description": "查询时间段的结束时间",
+            "in": "query",
+            "name": "endTime",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "过滤的数据类型",
+            "in": "query",
+            "name": "filterType",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "查询每页中的数量,默认值为 8",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "查询的偏移数(从offset开始计数拉取),默认值为 0 代表首页拉取",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "查询时间段的开始时间",
+            "in": "query",
+            "name": "startTime",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -59140,19 +58989,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "评价的 id",
+            "in": "query",
+            "name": "commentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiCommentReplyandcommentreplylistGetRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -59778,19 +59625,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "订单id",
+            "in": "query",
+            "name": "complaintOrderId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiMinishopComplaintorderdetailRequest"
-              }
-            }
-          },
-          "description": "请求体",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -60252,19 +60097,96 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiUserlogUserlogSearchRequest"
-              }
+          },
+          {
+            "description": "开始时间,必须是 date 指定日期的时间",
+            "in": "query",
+            "name": "begintime",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "YYYYMMDD格式的日期,仅支持最近7天",
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "结束时间,必须是 date 指定日期的时间",
+            "in": "query",
+            "name": "endtime",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "开发者通过setFileterMsg/addFilterMsg指定的 filterMsg 字段",
+            "in": "query",
+            "name": "filterMsg",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "用户微信号或者OpenId",
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "日志等级,返回大于等于 level 等级的日志,level的定义为2(Info)、4(Warn)、8(Error),如果指定为4,则返回大于等于4的日志,即返回 Warn 和Error日志",
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "返回的数据条数,用作分页,默认为20",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "开始返回的数据下标,用作分页,默认为0",
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "小程序启动的唯一ID,按 TraceId 查询会展示该次小程序启动过程的所有页面的日志。",
+            "in": "query",
+            "name": "traceId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "小程序页面路径,例如pages/index/index",
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -60348,19 +60270,28 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetWxaapiWxamptradeGetPenaltyListRequest"
-              }
+          },
+          {
+            "description": "获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过 100",
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
             }
           },
-          "description": "请求体",
-          "required": true
-        },
+          {
+            "description": "获取从第offset条开始的limit条记录(序号从 0 开始),最大不超过总记录数",
+            "in": "query",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

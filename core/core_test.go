@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -254,4 +257,227 @@ func parseQueryValue(raw, key string) string {
 		return ""
 	}
 	return v.Get(key)
+}
+
+// TestSetQueryValue covers the query-encoding helper directly, including the
+// slice branch that no generated endpoint exercises today.
+func TestSetQueryValue(t *testing.T) {
+	t.Run("scalar", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "page", reflect.ValueOf(7))
+		if got := values.Get("page"); got != "7" {
+			t.Errorf("page = %q, want 7", got)
+		}
+	})
+	t.Run("string", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "name", reflect.ValueOf("x"))
+		if got := values.Get("name"); got != "x" {
+			t.Errorf("name = %q, want x", got)
+		}
+	})
+	t.Run("slice repeats the key", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "drama_id", reflect.ValueOf([]int64{100200, 100205}))
+		got := values["drama_id"]
+		if len(got) != 2 || got[0] != "100200" || got[1] != "100205" {
+			t.Errorf("drama_id = %v, want two values in order", got)
+		}
+	})
+	t.Run("slice of strings", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "tag", reflect.ValueOf([]string{"a", "b"}))
+		if got := values["tag"]; len(got) != 2 || got[0] != "a" {
+			t.Errorf("tag = %v", got)
+		}
+	})
+	t.Run("array", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "n", reflect.ValueOf([2]int{1, 2}))
+		if got := values["n"]; len(got) != 2 {
+			t.Errorf("n = %v, want 2 values", got)
+		}
+	})
+	t.Run("nil slice sends nothing", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "empty", reflect.ValueOf([]int64(nil)))
+		if _, ok := values["empty"]; ok {
+			t.Errorf("empty = %v, want no key", values["empty"])
+		}
+	})
+	t.Run("empty slice leaves the key absent", func(t *testing.T) {
+		values := url.Values{}
+		setQueryValue(values, "empty", reflect.ValueOf([]string{}))
+		if _, ok := values["empty"]; ok {
+			t.Errorf("empty = %v, want no key", values["empty"])
+		}
+	})
+}
+
+// TestSecurePathInjectsDeclaredCredentials covers the credential parameters the
+// API security path must supply inside the encrypted payload, matching the plain
+// path's query injection. Only parameters the struct declares are touched.
+func TestSecurePathInjectsDeclaredCredentials(t *testing.T) {
+	// Lenient so the unsigned test replies are accepted; the request payload is
+	// what this test asserts.
+	// Paths is caller-supplied now, so the decorator must name both endpoints
+	// this test exercises.
+	sec := docAPISecurityFor(t, true, "/sns/jscode2session", "/wxa/getuserriskrank")
+	var envelope []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		envelope, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"errcode":0}`)
+	}))
+	defer srv.Close()
+	c := NewEndpointClient(EndpointConfig{
+		AppID: "wxappid", AppSecret: "SECRET", BaseURL: srv.URL, HTTPClient: srv.Client(),
+		Token:     func(context.Context) (string, error) { return "TOK", nil },
+		Modifiers: []RequestModifier{sec},
+	})
+	type req struct {
+		AppID  string `json:"appid"`
+		Secret string `json:"secret"`
+		Other  string `json:"other"`
+	}
+	if _, err := Call[map[string]any](c, context.Background(), http.MethodPost, "/sns/jscode2session",
+		&req{Other: "x"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := sec.open(envelope, apiSecurityAAD(srv.URL+"/sns/jscode2session", "wxappid", timeNowForSec(sec), docSymSN))
+	if err != nil {
+		t.Fatalf("decrypt: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(plain, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["appid"] != "wxappid" || got["secret"] != "SECRET" {
+		t.Errorf("declared credentials not injected into the payload: %s", plain)
+	}
+	if got["other"] != "x" {
+		t.Errorf("caller parameter lost: %s", plain)
+	}
+
+	// A struct that does not declare the credentials must not gain them.
+	var envelope2 []byte
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		envelope2, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"errcode":0}`)
+	}))
+	defer srv2.Close()
+	c2 := NewEndpointClient(EndpointConfig{
+		AppID: "wxappid", AppSecret: "SECRET", BaseURL: srv2.URL, HTTPClient: srv2.Client(),
+		Token:     func(context.Context) (string, error) { return "TOK", nil },
+		Modifiers: []RequestModifier{sec},
+	})
+	type other struct {
+		OpenID string `json:"openid"`
+	}
+	if _, err := Call[map[string]any](c2, context.Background(), http.MethodPost, "/wxa/getuserriskrank",
+		&other{OpenID: "o"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	plain2, err := sec.open(envelope2, apiSecurityAAD(srv2.URL+"/wxa/getuserriskrank", "wxappid", timeNowForSec(sec), docSymSN))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// _appid legitimately carries the appid; the credential PARAMETERS must not
+	// appear when the struct does not declare them.
+	var got2 map[string]any
+	if err := json.Unmarshal(plain2, &got2); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got2["appid"]; ok {
+		t.Errorf("appid parameter injected into a struct that does not declare it: %s", plain2)
+	}
+	if _, ok := got2["secret"]; ok {
+		t.Errorf("secret parameter injected into a struct that does not declare it: %s", plain2)
+	}
+	if strings.Contains(string(plain2), "SECRET") {
+		t.Errorf("the app secret leaked into the payload: %s", plain2)
+	}
+}
+
+// timeNowForSec reads the timestamp the runtime used, which its Clock pins.
+func timeNowForSec(sec *APISecurity) int64 { return sec.now().Unix() }
+
+// TestDecoratorAppliesOnlyToNamedPaths covers the core promise of the decorator
+// design: the caller names the endpoints, and a call to any other path is left
+// exactly as the generated runtime assembled it.
+func TestDecoratorAppliesOnlyToNamedPaths(t *testing.T) {
+	sec := docAPISecurityFor(t, true, "/wxa/getuserriskrank")
+	var body []byte
+	var query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		query = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"errcode":0}`)
+	}))
+	defer srv.Close()
+	c := NewEndpointClient(EndpointConfig{
+		AppID: "wxappid", AppSecret: "SECRET", BaseURL: srv.URL, HTTPClient: srv.Client(),
+		Token:     func(context.Context) (string, error) { return "TOK", nil },
+		Modifiers: []RequestModifier{sec},
+	})
+	type req struct {
+		OpenID string `json:"openid"`
+	}
+	// Covered: encrypted into the body.
+	if _, err := Call[map[string]any](c, context.Background(), http.MethodPost, "/wxa/getuserriskrank",
+		&req{OpenID: "o"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "authtag") {
+		t.Fatalf("covered path was not encrypted: %s", body)
+	}
+	// Not covered: untouched, so the documented JSON body is sent as-is.
+	if _, err := Call[map[string]any](c, context.Background(), http.MethodPost, "/wxa/msg_sec_check",
+		&req{OpenID: "o"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "authtag") {
+		t.Errorf("uncovered path was encrypted: %s", body)
+	}
+	if !strings.Contains(string(body), `"openid"`) {
+		t.Errorf("uncovered path did not send its documented body: %s", body)
+	}
+	_ = query
+}
+
+// TestUseInstallsDecoratorAfterConstruction covers the Use entry point: a client
+// built without modifiers can gain one later.
+func TestUseInstallsDecoratorAfterConstruction(t *testing.T) {
+	sec := docAPISecurityFor(t, true, "/wxa/getuserriskrank")
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"errcode":0}`)
+	}))
+	defer srv.Close()
+	c := NewEndpointClient(EndpointConfig{
+		AppID: "wxappid", BaseURL: srv.URL, HTTPClient: srv.Client(),
+		Token: func(context.Context) (string, error) { return "TOK", nil },
+	})
+	type req struct {
+		OpenID string `json:"openid"`
+	}
+	if _, err := Call[map[string]any](c, context.Background(), http.MethodPost, "/wxa/getuserriskrank",
+		&req{OpenID: "o"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "authtag") {
+		t.Fatalf("call before Use was already encrypted: %s", body)
+	}
+	c.Use(sec)
+	if _, err := Call[map[string]any](c, context.Background(), http.MethodPost, "/wxa/getuserriskrank",
+		&req{OpenID: "o"}, nil, false, SignNone); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "authtag") {
+		t.Errorf("call after Use was not encrypted: %s", body)
+	}
 }

@@ -49,10 +49,77 @@ IGNORE_CACHE=1 make docs-gen   # force a re-crawl first
   when `AppKey` is missing rather than sending an unsigned request.
 - `Env` — the Mini Program environment (`release` / `trial` / `develop`); the
   subscribe-message API defaults its `miniprogram_state` from it.
+- `Modifiers` — optional `[]core.RequestModifier` decorators. A modifier sees
+  the call before it is serialized (typed request values, path, method) and
+  after the response arrives, so optional layers the endpoint documentation
+  does not describe can be installed without the generated code knowing about
+  them. `core.APISecurity` is one such decorator (see "API security" below);
+  `Client.Use` installs more on an existing client.
 - `Cache`, `Proxy`, `BaseURL`, `HTTPClient` — optional overrides.
 
 WeChat Pay `retail/B2b` endpoints instead take a caller-computed `PaySig`
 field, because the merchant's payment key is not the app key.
+
+#### API security (二次加密和签名)
+
+WeChat lets an account turn on API 加密 in the MP backend. The endpoints whose
+documentation carries the "支持加密请求" note then require their parameters to
+be encrypted into the body and the body to be signed; the response arrives
+encrypted and signed too. `core.APISecurity` implements this as a
+`RequestModifier` decorator, so the generated code stays untouched. Because
+WeChat documents support per API ("只有部分 API 支持加解密，具体可参考各 API
+文档"), the caller names the paths its account actually uses:
+
+```go
+sec, err := core.NewAPISecurity(core.APISecurityConfig{
+	SymKey:     "<base64 API 对称密钥>",
+	SymSN:      "<API 对称密钥编号>",
+	PrivateKey: "<PEM API 应用私钥>",
+	// 平台证书编号 -> PEM, downloaded from the MP backend.
+	PlatformCerts: map[string]string{"<编号>": "<PEM 平台证书>"},
+	// The endpoints to secure. Fill this with the paths your account uses
+	// whose docs carry the "支持加密请求" note.
+	Paths: []string{"/wxa/getuserriskrank", "/wxa/msg_sec_check", /* ... */},
+})
+if err != nil {
+	return err
+}
+client := miniprogram.New(miniprogram.Config{
+	AppID: ..., AppSecret: ...,
+	Modifiers: []core.RequestModifier{sec},
+})
+```
+
+Any call whose path is not in `Paths` is left exactly as the runtime assembled
+it, so the decorator is scoped to what the caller declares. `Client.Use(sec)`
+installs one after construction.
+
+The wire protocol (`urlpath\nappid\ntimestamp\nbody` for RSA-PSS signing,
+`urlpath|appid|timestamp|sn` as GCM additional data, the `_n`/`_appid`/
+`_timestamp` security fields) is pinned in `core/apisecurity_doc_test.go`
+against the vectors the guide publishes. Parameters come from the typed request
+struct, so a field's declared type is preserved in the encrypted JSON;
+`access_token` is kept out of the payload and in the URL query, as the guide
+requires.
+
+By default a covered endpoint must answer with a signed response: if the reply
+carries no `Wechatmp-Signature` the call fails rather than silently falling back
+to unverified plain text, which is what "防篡改" is for. A body shaped like an
+encrypted envelope is never accepted unsigned, because that would surface as a
+successful call with zeroed fields. If a deployment genuinely receives unsigned
+replies, set `APISecurityConfig.AllowUnsignedResponses: true` to opt out.
+
+Four endpoints that the docs mark as supporting the layer are GET methods
+(`/wxa/business/getuserencryptkey` and the three
+`/cgi-bin/express/business/*/getall`): the guide only demonstrates a POST, so
+the GET-with-encrypted-body path is an inference and has not been verified
+against the live platform. If WeChat rejects it, simply leave those paths out of
+`Paths` to call them in the clear as before.
+
+Only AES256_GCM + RSAwithSHA256 is implemented. The 国密 pair (SM4_GCM +
+SM2withSM3) is reserved but not implemented: the guide publishes no verifiable
+vector for it and Go has no standard-library implementation, so the signature
+encoding could not be confirmed against WeChat.
 
 ## Packages
 
@@ -65,6 +132,13 @@ per platform:
 - `core.EndpointClient`: the runtime of the generated endpoint methods —
   tag-driven request assembly (query vs JSON body), application-credential and
   access-token injection, and request signing.
+- `core.RequestModifier` + `Client.Use`: the decorator hook that sees a call
+  before serialization (typed request values) and after the response, letting
+  optional layers attach without generated-code changes.
+- `core.APISecurity` + `core.NewAPISecurity()`: the API 二次加密和签名 layer as
+  one such decorator — AES-256-GCM request encryption, RSA-PSS request signing,
+  and platform-certificate response verification and decryption, scoped to the
+  paths the caller lists.
 - `core.Client`: the authenticated HTTP client beneath it; plain `net/http`
   transport, proxy/timeout configuration, and per-account `access_token`
   caching with singleflight de-duplication plus a transparent retry after a
@@ -75,8 +149,9 @@ per platform:
   the code, message, `rid` and raw body.
 - `core.Cache` + `core.NewMemoryCache()`: pluggable credential cache.
 - `core.MessageCrypto`: message-push callback signature verification and
-  AES-256-CBC payload (de)encryption. Also `core.JSSDKConfig` /
-  `core.JSSDKSignature` for JS-SDK signing.
+  AES-256-CBC payload (de)encryption, including the signed reply envelope
+  (`core.Reply`). Also `core.JSSDKConfig` / `core.JSSDKSignature` for JS-SDK
+  signing.
 - `core.MiniAppEnv`: deployment environment used by the subscribe-message APIs.
 
 ### miniprogram

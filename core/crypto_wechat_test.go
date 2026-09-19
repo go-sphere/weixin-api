@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -38,7 +40,8 @@ func wechatEncrypt(aesKey []byte, msg, appID string) (string, error) {
 	raw := append(random, msgLen...)
 	raw = append(raw, msg...)
 	raw = append(raw, appID...)
-	raw = pkcs7Pad(raw, aes.BlockSize)
+	// K is the key length (32), per the documentation's PKCS#7 definition.
+	raw = pkcs7Pad(raw, aesKeySize)
 	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return "", err
@@ -73,6 +76,140 @@ func wechatDecrypt(aesKey []byte, encoded string) (string, error) {
 	msgLen := binary.BigEndian.Uint32(plain[16:20])
 	return string(plain[20 : 20+msgLen]), nil
 }
+
+// TestMessageCryptoDecryptsDocumentedVector decrypts the ciphertext the
+// message-push documentation publishes for its worked example (token "AAAAA",
+// the 43-character all-A EncodingAESKey, appid wxba5fad812f8e6fb9). The
+// ciphertext is 224 bytes for a 205-byte plaintext, which is only consistent
+// with PKCS#7 padding to a multiple of 32: the earlier implementation, which
+// unpad against the 16-byte AES block size, failed to open it.
+//
+// Reference:
+// https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/message-push.html
+func TestMessageCryptoDecryptsDocumentedVector(t *testing.T) {
+	mc, err := NewMessageCrypto(docPushToken, docPushAESKey, docPushAppID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := mc.DecryptBody(docPushEncrypt)
+	if err != nil {
+		t.Fatalf("DecryptBody on the documented ciphertext: %v", err)
+	}
+	if plain != docPushPlaintext {
+		t.Fatalf("documented plaintext mismatch:\n got %s\nwant %s", plain, docPushPlaintext)
+	}
+	// The documented msg_signature covers token/timestamp/nonce/Encrypt and must
+	// verify with VerifyBodySignature.
+	if !mc.VerifyBodySignature(docPushMsgSig, docPushTimestamp, docPushNonce, docPushEncrypt) {
+		t.Error("documented msg_signature did not verify")
+	}
+	// The documented URL-verification signature covers only
+	// token/timestamp/nonce; VerifyURLSignature must accept it.
+	if !mc.VerifyURLSignature(docPushURLSig, docPushURLTimestamp, docPushURLNonce) {
+		t.Error("documented URL signature did not verify")
+	}
+	// And the three-argument signature must NOT verify when the echostr is
+	// folded in, which is what the earlier four-argument helper did.
+	if mc.VerifyBodySignature(docPushURLSig, docPushURLTimestamp, docPushURLNonce, docPushURLEchostr) {
+		t.Error("URL signature verified with echostr included, want mismatch")
+	}
+}
+
+// TestDeprecatedVerifySignatureContract pins the compatibility shim's known
+// semantics: an empty fourth argument falls back to the three-argument handshake,
+// while passing the real echostr does not verify (the documented handshake never
+// included it). This is a trap for callers that followed the old doc comment, so
+// the behaviour is asserted rather than left implicit.
+func TestDeprecatedVerifySignatureContract(t *testing.T) {
+	mc, err := NewMessageCrypto(docPushToken, docPushAESKey, docPushAppID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mc.VerifySignature(docPushURLSig, docPushURLTimestamp, docPushURLNonce, "") {
+		t.Error(`VerifySignature with empty echostr should accept the documented GET handshake`)
+	}
+	if mc.VerifySignature(docPushURLSig, docPushURLTimestamp, docPushURLNonce, docPushURLEchostr) {
+		t.Error("VerifySignature must not accept the GET signature when the echostr is folded in")
+	}
+	// The four-argument POST form still works through the shim.
+	if !mc.VerifySignature(docPushMsgSig, docPushTimestamp, docPushNonce, docPushEncrypt) {
+		t.Error("VerifySignature should accept the documented four-argument msg_signature")
+	}
+}
+
+// TestMessageCryptoReplyEnvelopeIsComplete checks the reply envelope carries all
+// four documented fields (Encrypt, MsgSignature, TimeStamp, Nonce) and that the
+// signature covers the ciphertext.
+func TestMessageCryptoReplyEnvelopeIsComplete(t *testing.T) {
+	mc, err := NewMessageCrypto(docPushToken, docPushAESKey, docPushAppID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plaintext := `{"demo_resp":"good luck"}`
+	envelope, err := mc.EncryptedReplyEnvelope(plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"<Encrypt>", "<MsgSignature>", "<TimeStamp>", "<Nonce>"} {
+		if !strings.Contains(envelope, field) {
+			t.Errorf("reply envelope is missing %s: %s", field, envelope)
+		}
+	}
+	var reply Reply
+	if err := xml.Unmarshal([]byte(envelope), &reply); err != nil {
+		t.Fatalf("parse reply envelope: %v", err)
+	}
+	if want := mc.SignReply(reply.TimeStamp, reply.Nonce, reply.Encrypt); reply.MsgSignature != want {
+		t.Errorf("MsgSignature does not cover the ciphertext: got %s want %s", reply.MsgSignature, want)
+	}
+	// The ciphertext must decrypt back to the reply body.
+	got, err := mc.DecryptBody(reply.Encrypt)
+	if err != nil {
+		t.Fatalf("decrypt own reply: %v", err)
+	}
+	if got != plaintext {
+		t.Errorf("reply round trip mismatch:\n got %s\nwant %s", got, plaintext)
+	}
+	// And the JSON form must carry the same four fields.
+	jsonReply, err := reply.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asMap map[string]string
+	if err := json.Unmarshal(jsonReply, &asMap); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"Encrypt", "MsgSignature", "TimeStamp", "Nonce"} {
+		if asMap[key] == "" {
+			t.Errorf("JSON reply is missing %s: %s", key, jsonReply)
+		}
+	}
+}
+
+// Documented message-push vectors: token "AAAAA", EncodingAESKey of 43 "A"s,
+// appid wxba5fad812f8e6fb9. Two distinct scenarios are published (URL
+// verification and an encrypted push), hence two timestamp/nonce pairs.
+const (
+	docPushToken  = "AAAAA"
+	docPushAESKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	docPushAppID  = "wxba5fad812f8e6fb9"
+
+	docPushURLTimestamp = "1714036504"
+	docPushURLNonce     = "1514711492"
+	docPushURLEchostr   = "4375120948345356249"
+	docPushURLSig       = "f464b24fc39322e44b38aa78f5edd27bd1441696"
+
+	docPushTimestamp = "1714112445"
+	docPushNonce     = "415670741"
+	docPushMsgSig    = "046e02f8204d34f8ba5fa3b1db94908f3df2e9b3"
+)
+
+// docPushEncrypt is the published ciphertext of the encrypted-push example.
+const docPushEncrypt = "+qdx1OKCy+5JPCBFWw70tm0fJGb2Jmeia4FCB7kao+/Q5c/ohsOzQHi8khUOb05JCpj0JB4RvQMkUyus8TPxLKJGQqcvZqzDpVzazhZv6JsXUnnR8XGT740XgXZUXQ7vJVnAG+tE8NUd4yFyjPy7GgiaviNrlCTj+l5kdfMuFUPpRSrfMZuMcp3Fn2Pede2IuQrKEYwKSqFIZoNqJ4M8EajAsjLY2km32IIjdf8YL/P50F7mStwntrA2cPDrM1kb6mOcfBgRtWygb3VIYnSeOBrebufAlr7F9mFUPAJGj04="
+
+// docPushPlaintext is the plaintext of that ciphertext: 167 bytes, matching
+// the msg_len=167 the documentation states for the example.
+const docPushPlaintext = `{"ToUserName":"gh_97417a04a28d","FromUserName":"o9AgO5Kd5ggOC-bXrbNODIiE3bGY","CreateTime":1714112445,"MsgType":"event","Event":"debug_demo","debug_str":"hello world"}`
 
 // TestMessageCryptoDecryptsOfficialSchemeCiphertext checks that DecryptBody can
 // decrypt a payload produced by the official WXBizMsgCrypt scheme (regression
