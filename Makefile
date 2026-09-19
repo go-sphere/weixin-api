@@ -4,13 +4,16 @@ NILAWAY ?= nilaway
 
 DIRECT_DEPS_TEMPLATE := {{if and (not .Main) (not .Indirect) (not .Replace)}}{{.Path}}{{end}}
 
+# The library plus the two out-of-tree modules (docs pipeline and example).
+GO_MOD_DIRS := . tools/docsync examples/gin-login
+
 # Resolve go-sphere modules straight from GitHub, bypassing the module proxy
 # and its cached "@latest", which lags behind freshly pushed tags.
 DIRECT_ORIGIN := GOPRIVATE=github.com/go-sphere/*
 
 .DEFAULT_GOAL := check
 
-.PHONY: deps-update tidy fmt test lint check docs-crawl docs-swagger docs-gen docs-sync docs-check docs-test docs-parity examples-test
+.PHONY: deps-update tidy tidy-check fmt build test lint check docs-crawl docs-swagger docs-gen docs-sync docs-check docs-test docs-parity examples-test
 
 deps-update:
 	@GOWORK=off $(DIRECT_ORIGIN) $(GO) mod tidy; \
@@ -19,11 +22,33 @@ deps-update:
 	GOWORK=off $(DIRECT_ORIGIN) $(GO) mod tidy
 
 tidy:
-	GOWORK=off $(GO) mod tidy
+	@set -eu; \
+	for dir in $(GO_MOD_DIRS); do \
+		echo "==> tidying $$dir"; \
+		( cd "$$dir" && GOWORK=off $(GO) mod tidy ); \
+	done
+
+# Non-mutating counterpart of tidy, for CI: fails if any module's go.mod/go.sum
+# is not what a consumer would resolve.
+tidy-check:
+	@set -eu; \
+	for dir in $(GO_MOD_DIRS); do \
+		echo "==> checking dependencies in $$dir"; \
+		( cd "$$dir" && GOWORK=off $(GO) mod tidy -diff ); \
+	done
 
 fmt:
 	$(GO) fmt ./...
 	$(GOLANGCI_LINT) fmt --no-config --enable gofmt --enable goimports
+
+# -o /dev/null: docsync and the example are main packages, and compiling them
+# must not drop binaries into the tree.
+build:
+	@set -eu; \
+	for dir in $(GO_MOD_DIRS); do \
+		echo "==> building $$dir"; \
+		( cd "$$dir" && $(GO) build -o /dev/null ./... ); \
+	done
 
 test:
 	$(GO) test ./...
@@ -34,8 +59,7 @@ lint:
 	$(GOLANGCI_LINT) run --no-config
 	$(NILAWAY) -include-pkgs="$$($(GO) list -m)" ./...
 
-check:
-	GOWORK=off $(GO) mod tidy -diff
+check: tidy-check
 	$(MAKE) lint
 	$(MAKE) test
 

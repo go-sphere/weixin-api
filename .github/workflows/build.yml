@@ -1,4 +1,4 @@
-name: Test
+name: CI
 
 permissions:
   contents: read
@@ -19,7 +19,15 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
 
-      # Library module: tidy check, lint and unit tests.
+      # All three modules: every go.mod must stay resolvable for consumers.
+      - name: Check dependencies
+        run: make tidy-check
+
+      - name: Build
+        run: make build
+
+      # Library module: unit tests. Lint is not run here because golangci-lint
+      # and nilaway would need a separate tool install.
       - name: Library check
         run: make test
 
