@@ -31,4 +31,54 @@
 // Callers normally use a platform package rather than this one directly; core
 // is imported for the shared types those packages expose (APIError, Cache,
 // Credentials, MessageCrypto, MiniAppEnv, ...).
+//
+// # Usage
+//
+// Build a platform client, then use core to match errors and to configure
+// optional layers:
+//
+//	import (
+//		"errors"
+//		"log"
+//
+//		"github.com/go-sphere/weixin-api/core"
+//		"github.com/go-sphere/weixin-api/miniprogram"
+//	)
+//
+//	client := miniprogram.New(miniprogram.Config{
+//		AppID:     "wx-app-id",
+//		AppSecret: "app-secret",
+//		Cache:     myCache, // optional core.Cache shared across processes
+//	})
+//	resp, err := client.GetSnsJscode2Session(ctx, req)
+//	switch {
+//	case errors.Is(err, core.ErrorInvalidCredential):
+//		// wrong AppID/AppSecret
+//	case err != nil:
+//		if apiErr, ok := errors.AsType[*core.APIError](err); ok {
+//			log.Println(apiErr.ErrCode, apiErr.ErrMsg, apiErr.RID)
+//		}
+//	}
+//
+// Handle message-push callbacks with [NewMessageCrypto]:
+//
+//	mc, err := core.NewMessageCrypto(token, encodingAESKey, appID)
+//	if err != nil {
+//		return err
+//	}
+//	if !mc.VerifyBodySignature(msgSignature, timestamp, nonce, encrypt) {
+//		return errors.New("bad signature")
+//	}
+//	body, err := mc.DecodeEncryptedPushXML(rawXML)
+//
+// Install API 二次加密和签名 with [NewAPISecurity] and the client's Use method
+// (or the platform Config.Modifiers field) before the client serves requests.
+//
+// # Concurrency
+//
+// [Client], [EndpointClient], [MessageCrypto], [APISecurity] and the cache
+// returned by [NewMemoryCache] are safe for concurrent use once constructed.
+// [EndpointClient.Use] is the exception: call it before the client is shared.
+// Custom [Cache] and [RequestModifier] implementations must be safe for
+// concurrent use too.
 package core

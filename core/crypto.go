@@ -24,6 +24,9 @@ import (
 // receives the callback pushes (access token change, media check result,
 // subscribe message feedback...).
 //
+// Build it with NewMessageCrypto. A MessageCrypto is immutable and safe for
+// concurrent use.
+//
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/message-push.html
 type MessageCrypto struct {
 	// token is the message push Token configured in the Mini Program console.
@@ -39,6 +42,10 @@ type MessageCrypto struct {
 }
 
 // NewMessageCrypto builds the crypto helper for the message push callback.
+// token is the push Token, encodingAESKey the 43-character EncodingAESKey and
+// appID the account appid. It returns an error when encodingAESKey is not a
+// valid 43-character key. An empty token makes every Verify* method return
+// false; an empty appID disables the appid check in DecryptBody.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/message-push.html
 func NewMessageCrypto(token, encodingAESKey, appID string) (*MessageCrypto, error) {
@@ -149,8 +156,11 @@ type MessagePushBody struct {
 	Raw string
 }
 
-// DecryptBody decrypts an encrypted message push body and returns the
-// plaintext XML.
+// DecryptBody decrypts an encrypted message push body (the base64 Encrypt
+// field) and returns the plaintext message. It returns an error for invalid
+// base64, bad length or padding, and, when the MessageCrypto has an appID, for
+// a body addressed to a different appid. It does not verify the signature;
+// call VerifyBodySignature first.
 //
 // WeChat's message-push encryption (安全模式) uses AES-256-CBC with a fixed IV
 // derived from the AES key (iv = key[:16]) and does NOT prepend an IV to the
@@ -343,8 +353,11 @@ func (c *MessageCrypto) SignReply(timestamp, nonce, encryptedBody string) string
 	return hex.EncodeToString(sum[:])
 }
 
-// DecodeEncryptedPushXML parses an <xml> envelope, decrypts it and returns the
-// plaintext message body.
+// DecodeEncryptedPushXML parses an <xml> envelope, decrypts its Encrypt node
+// and returns the plaintext message body, with Raw holding the decrypted XML.
+// It returns an error when raw is not XML, has no Encrypt node, fails
+// DecryptBody, or decrypts to something that is not XML. It does not verify
+// the signature; call VerifyBodySignature first.
 func (c *MessageCrypto) DecodeEncryptedPushXML(raw []byte) (*MessagePushBody, error) {
 	var env EncryptedPushBody
 	if err := xml.Unmarshal(raw, &env); err != nil {

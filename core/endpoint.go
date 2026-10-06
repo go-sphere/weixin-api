@@ -113,9 +113,13 @@ type EndpointConfig struct {
 	Modifiers []RequestModifier
 }
 
-// EndpointClient issues documented WeChat API calls. Token caching,
-// de-duplicated refresh and the retry after a token failure come from the
-// embedded Client.
+// EndpointClient issues documented WeChat API calls; the generated platform
+// clients embed it. Token caching, de-duplicated refresh and the retry after a
+// token failure come from the embedded Client. Build it with
+// NewEndpointClient; the zero value is not usable.
+//
+// An EndpointClient is safe for concurrent use, except that Use must not run
+// concurrently with calls.
 type EndpointClient struct {
 	*Client
 	tokenFn   func(ctx context.Context) (string, error)
@@ -125,7 +129,9 @@ type EndpointClient struct {
 	modifiers []RequestModifier
 }
 
-// NewEndpointClient builds a client for one WeChat platform account.
+// NewEndpointClient builds a client for one WeChat platform account. It never
+// fails and makes no network calls; configuration problems such as wrong
+// credentials surface on the first call. cfg.Modifiers is copied.
 func NewEndpointClient(cfg EndpointConfig) *EndpointClient {
 	env := cfg.Env
 	if env == "" {
@@ -151,6 +157,9 @@ func NewEndpointClient(cfg EndpointConfig) *EndpointClient {
 
 // WithCredentials derives a client for another account, sharing the token cache,
 // HTTP client and request modifiers so one process can serve several accounts.
+// AppKey, Env and a Token function are inherited as well; with a Token
+// function the derived client still uses it, not appID/appSecret. c is not
+// modified.
 func (c *EndpointClient) WithCredentials(appID, appSecret string) *EndpointClient {
 	return NewEndpointClient(EndpointConfig{
 		AppID:      appID,
@@ -169,7 +178,9 @@ func (c *EndpointClient) WithCredentials(appID, appSecret string) *EndpointClien
 func (c *EndpointClient) Env() MiniAppEnv { return c.env }
 
 // AccessToken returns a usable access token. A caller-supplied Token function
-// takes precedence and disables caching.
+// takes precedence: it is called on every request, its result and error are
+// returned as is, and reload is ignored. Otherwise it behaves like
+// Client.GetAccessToken.
 func (c *EndpointClient) AccessToken(ctx context.Context, reload bool) (string, error) {
 	if c.tokenFn != nil {
 		return c.tokenFn(ctx)
@@ -178,8 +189,10 @@ func (c *EndpointClient) AccessToken(ctx context.Context, reload bool) (string, 
 }
 
 // GetJsSDKConfig builds the signed wx.config payload for a page URL served
-// under the account, fetching a jsapi ticket first. The signature algorithm is
-// shared with the rest of the library through this package.
+// under the account, fetching a jsapi ticket from /cgi-bin/ticket/getticket
+// first. The ticket is fetched on every call and is not cached, and WeChat
+// rate-limits that endpoint, so cache the ticket or the result yourself under
+// load. Errors are those of Call; an empty ticket is also an error.
 func (c *EndpointClient) GetJsSDKConfig(ctx context.Context, pageURL string) (*JSSDKConfig, error) {
 	ticket, err := c.jsapiTicket(ctx)
 	if err != nil {
@@ -570,9 +583,19 @@ func (c *EndpointClient) send(ctx context.Context, method, path string, auth boo
 	return data, err
 }
 
-// Call executes one documented endpoint that returns a JSON payload. auth
-// reports whether the endpoint takes an access_token; sign is its signing
-// requirement.
+// Call executes one documented endpoint that returns a JSON payload. The
+// generated endpoint methods call it; application code normally does not.
+// req is a pointer to a struct whose query-tagged fields become URL parameters
+// and json-tagged fields the JSON body; errDocs maps documented errcodes to
+// their meaning. auth reports whether the endpoint takes an access_token; sign
+// is its signing requirement.
+//
+// ctx bounds the token fetch and the HTTP request. A non-zero errcode in the
+// response is returned as an error (see ClassifyBusinessError); an *APIError
+// is enriched from errDocs. When auth is set and the client manages the token
+// itself, a token error triggers one forced refresh and one retry. A non-200
+// HTTP status, a transport failure and a decode failure are returned as plain
+// errors. On error the result is nil.
 func Call[T any](c *EndpointClient, ctx context.Context, method, path string, req any, errDocs map[int]ErrDoc, auth bool, sign SignMode) (*T, error) {
 	data, err := c.send(ctx, method, path, auth, func(token string) (*http.Request, error) {
 		return c.buildRequest(ctx, token, method, path, req, sign)
@@ -589,7 +612,8 @@ func Call[T any](c *EndpointClient, ctx context.Context, method, path string, re
 
 // CallBinary executes one documented endpoint that returns raw bytes on success
 // (media downloads, mini program code images) and the JSON errcode envelope
-// only on failure.
+// only on failure. Request assembly, token handling, retry and errors are as
+// for Call; a successful body is returned unparsed.
 func CallBinary(c *EndpointClient, ctx context.Context, method, path string, req any, errDocs map[int]ErrDoc, auth bool, sign SignMode) ([]byte, error) {
 	return c.send(ctx, method, path, auth, func(token string) (*http.Request, error) {
 		return c.buildRequest(ctx, token, method, path, req, sign)
@@ -597,6 +621,13 @@ func CallBinary(c *EndpointClient, ctx context.Context, method, path string, req
 }
 
 // CallUpload executes one documented multipart/form-data upload endpoint.
+// Tagged fields of req become form fields (query-tagged ones URL parameters)
+// and file, when non-nil, the file part. Token handling and errors are as for
+// Call, and the raw response body is returned. The token-refresh retry
+// rebuilds the request from the same file.Reader, which the first attempt has
+// already consumed, so the retried file part may be empty; callers uploading
+// from a non-rewindable reader should be prepared to re-upload after a token
+// error.
 //
 // Uploads are not decorated: the documented API 二次加密 does not cover them,
 // so the body stays the multipart form the endpoint requires.
@@ -606,7 +637,9 @@ func CallUpload(c *EndpointClient, ctx context.Context, path string, req any, fi
 	}, errDocs)
 }
 
-// Decode converts a successful raw response into the typed payload.
+// Decode converts a successful raw response into the typed payload. When err
+// is non-nil it is returned unchanged; method and path only label a decode
+// error, and ctx is unused.
 func Decode[T any](ctx context.Context, method, path string, data []byte, err error) (*T, error) {
 	if err != nil {
 		return nil, err

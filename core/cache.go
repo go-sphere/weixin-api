@@ -6,9 +6,10 @@ import (
 	"time"
 )
 
-// Cache stores short lived credentials (access tokens and JS tickets) so the
-// platform clients do not hit WeChat for every request. Implementations should
-// be thread-safe; the in-process memory cache provided by NewMemoryCache is
+// Cache stores short lived credentials (currently access tokens; jsapi tickets
+// are not cached) so the platform clients do not hit WeChat for every request.
+// Keys are prefixed with the account AppID. Implementations must be safe for
+// concurrent use; the in-process memory cache provided by NewMemoryCache is
 // suitable for single-process services, and distributed deployments typically
 // back this interface with Redis.
 type Cache interface {
@@ -16,7 +17,8 @@ type Cache interface {
 	// cached (or already expired). Implementations should return nil error
 	// instead of "not found" style errors.
 	Get(ctx context.Context, key string) (value string, exist bool, err error)
-	// SetWithTTL stores value under key for ttl.
+	// SetWithTTL stores value under key for ttl. A returned error fails
+	// the token fetch that tried to cache the value.
 	SetWithTTL(ctx context.Context, key string, value string, ttl time.Duration) error
 }
 
@@ -34,6 +36,8 @@ type memoryCacheEntry struct {
 }
 
 // NewMemoryCache returns a goroutine-safe in-process Cache with per-entry TTLs.
+// Its Get never returns an error; a non-positive ttl passed to SetWithTTL is
+// stored for one minute. Expired entries are not evicted, only ignored.
 // Prefer a shared/distributed cache in multi-instance deployments so token
 // refresh requests do not multiply across replicas.
 func NewMemoryCache() Cache {

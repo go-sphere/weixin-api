@@ -48,8 +48,12 @@ func CredentialsOf(creds Credentials) CredentialProvider {
 }
 
 // Client is the shared HTTP + token foundation of every WeChat platform
-// package. Platform clients embed *Client and add their own typed endpoint
-// methods on top.
+// package. Platform clients embed *Client (through [EndpointClient]) and add
+// their own typed endpoint methods on top. Build it with [NewClient]; the zero
+// value is not usable.
+//
+// A Client is safe for concurrent use as long as its [Cache] is. Its
+// configuration is fixed at construction.
 type Client struct {
 	sf         singleflight.Group
 	cache      Cache
@@ -63,21 +67,27 @@ type Client struct {
 
 // ClientOptions customises a core client.
 type ClientOptions struct {
-	// Cache for access tokens and tickets; nil creates an in-process memory
-	// cache.
+	// Cache stores access tokens; nil creates an in-process memory cache
+	// (see NewMemoryCache).
 	Cache Cache
 	// Proxy is an optional HTTP(S) proxy URL used for outbound requests,
-	// e.g. "http://127.0.0.1:7890".
+	// e.g. "http://127.0.0.1:7890". It only applies to the default HTTP
+	// client: it is ignored when HTTPClient is set, and an unparsable URL is
+	// silently ignored.
 	Proxy string
-	// BaseURL overrides the WeChat API host (used by tests).
+	// BaseURL overrides the WeChat API host, without a trailing slash (tests,
+	// gateways). Empty means DefaultBaseURL.
 	BaseURL string
-	// HTTPClient injects a custom client (used by tests); when nil a default
-	// client with a 30s timeout is created.
+	// HTTPClient injects a custom client, used as is; when nil a client with a
+	// 30s timeout (and Proxy, if set) is created.
 	HTTPClient *http.Client
 }
 
 // NewClient builds a core Client. creds may be nil when the platform provides
-// its own token source override.
+// its own token source override; GetAccessToken then requests a token with
+// empty credentials. creds is called once here to derive the token cache key
+// prefix from the AppID, and again whenever credentials are needed. NewClient never fails;
+// see ClientOptions for defaults.
 func NewClient(creds CredentialProvider, opts ClientOptions) *Client {
 	cache := opts.Cache
 	if cache == nil {
@@ -128,8 +138,9 @@ func (c *Client) Credentials() Credentials {
 func (c *Client) AppID() string { return c.Credentials().AppID }
 
 // WithCredentials builds a derived client that uses different credentials but
-// shares the transport and cache. Useful to manage several accounts with one
-// HTTP setup.
+// shares the HTTP client, base URL and cache. Tokens are cached under a key
+// prefixed with the AppID, so accounts sharing the cache do not collide. c is
+// not modified.
 func (c *Client) WithCredentials(creds Credentials) *Client {
 	return NewClient(CredentialsOf(creds), ClientOptions{
 		Cache:      c.cache,
@@ -175,9 +186,20 @@ func (c *Client) fetchAccessToken(ctx context.Context) (string, int, error) {
 }
 
 // GetAccessToken returns a usable access token, serving it from the cache when
-// one is still valid. Concurrent callers share a single upstream token request
-// (singleflight). A token whose cached entry is missing or expired triggers a
-// refresh; pass reload to force the refresh.
+// one is still valid. A token whose cached entry is missing or expired triggers
+// a refresh from /cgi-bin/token; pass reload to skip the cache and force the
+// refresh. A cache read error is treated as a miss.
+//
+// Concurrent callers for the same account share a single upstream token
+// request (singleflight); they all receive its result, including an error
+// caused by cancellation of the context of the caller that started it. The
+// fetched token is cached for the server's expires_in minus a 2s safety
+// margin; a response without a positive expires_in is not cached.
+//
+// Errors: errcode 40001, 40014 and 42001 return ErrorInvalidCredential,
+// ErrorInvalidAccessToken and ErrorAccessTokenExpired; any other non-zero
+// errcode returns an *APIError. Transport, decode and cache write failures are
+// returned wrapped, and a response with an empty access_token is an error.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html
 func (c *Client) GetAccessToken(ctx context.Context, reload bool) (string, error) {

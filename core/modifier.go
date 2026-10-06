@@ -59,12 +59,17 @@ type RequestModifier interface {
 }
 
 // ErrModifierRejected reports a response a decorator refused to accept.
+// Decorators may return or wrap it from ModifyResponse so callers can match it
+// with errors.Is; the runtime returns a decorator's error unchanged and
+// APISecurity does not currently use it.
 var ErrModifierRejected = errors.New("wechat: request modifier rejected the response")
 
 // Use installs request modifiers on the client, in the order given: each is
 // asked to modify the request until one returns a decorated request, and every
-// one is asked to modify the response. Install them before the client is used
-// concurrently.
+// one is asked to modify the response. Use is not safe for concurrent use with
+// calls on the same client: install modifiers before the client is shared.
+// Clients already derived with WithCredentials keep the modifiers they were
+// created with.
 //
 // This is the decorator entry point; platform clients expose it through their
 // embedded EndpointClient, so a caller can do:

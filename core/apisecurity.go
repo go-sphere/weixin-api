@@ -53,7 +53,7 @@ import (
 // as well and keeps access_token in the query. A GET carrying a body is
 // unusual, and this path has NOT been verified against the live platform: if
 // WeChat rejects it, those four endpoints still work by leaving
-// Config.APISecurity nil (they are then called in the clear, as before).
+// them out of APISecurityConfig.Paths (they are then called in the clear).
 //
 // Every other detail is pinned by core/apisecurity_doc_test.go against the
 // vectors the guide publishes.
@@ -146,7 +146,11 @@ type APISecurity struct {
 	paths         map[string]bool
 }
 
-// NewAPISecurity validates cfg and builds the API-security decorator.
+// NewAPISecurity validates cfg and builds the API-security decorator. It
+// returns an error wrapping ErrAPISecurityAlgUnsupported for any Alg other than
+// APIAlgAES256GCM, and an error when SymSN is empty, SymKey does not decode to
+// 32 bytes, PrivateKey is not a PEM RSA key, or a PlatformCerts entry does not
+// parse. Install the result with Use or the platform Config.Modifiers.
 func NewAPISecurity(cfg APISecurityConfig) (*APISecurity, error) {
 	if cfg.Alg != APIAlgAES256GCM {
 		return nil, fmt.Errorf("%w: only AES256_GCM/RSAwithSHA256 is implemented, got %d", ErrAPISecurityAlgUnsupported, cfg.Alg)
@@ -318,7 +322,10 @@ func collectParams(rv reflect.Value) []apiParam {
 }
 
 // SecureRequest encrypts the parameters and signs the ciphertext, returning the
-// request body and the Wechatmp-* headers for appID at urlpath.
+// request body and the Wechatmp-* headers for appID at urlpath. urlpath is the
+// full request URL without the query. The parameter list is assembled by
+// ModifyRequest; callers outside this package can only pass nil, which
+// encrypts the security fields alone. An empty appID is an error.
 func (s *APISecurity) SecureRequest(appID, urlpath string, params []apiParam) ([]byte, map[string]string, error) {
 	if appID == "" {
 		return nil, nil, errors.New("wechat: api security requires an appid")

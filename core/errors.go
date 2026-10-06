@@ -36,8 +36,11 @@ const (
 	ErrCodeAPIFreqOutOfLimit = 45009
 )
 
-// Sentinel errors returned for access-token problems. Use errors.Is to match
-// them when implementing custom retry/refresh logic.
+// Sentinel errors returned for access-token problems, by ClassifyBusinessError
+// and therefore by every client call and token fetch. They are returned
+// unwrapped and carry no rid or raw body. Use errors.Is to match them when
+// implementing custom retry/refresh logic; EndpointClient already retries a
+// call once after one of them when it manages the token itself.
 var (
 	ErrorInvalidCredential  = errors.New("wechat: invalid app credential (errcode 40001)")
 	ErrorAccessTokenExpired = errors.New("wechat: access token expired (errcode 42001)")
@@ -64,7 +67,9 @@ func (e ErrResponse) Error() string {
 	return fmt.Sprintf("wechat api error: %s (errcode %d)", e.ErrMsg, e.ErrCode)
 }
 
-// APIError is a WeChat business error. It carries the trace id (rid) when the
+// APIError is a WeChat business error, returned as *APIError for every
+// non-zero errcode except the access-token codes (see ErrorInvalidCredential).
+// Match it with errors.As or errors.AsType. It carries the trace id (rid) when the
 // upstream response includes one — the value to report to WeChat support — and
 // the raw response bytes so callers can inspect fields the envelope does not
 // cover. For endpoints whose documentation tabulates error codes, Description,
@@ -93,7 +98,7 @@ func (e *APIError) Error() string {
 }
 
 // ClassifyBusinessError converts a non-zero WeChat business error code into an
-// error. Access-token related codes are mapped to the exported sentinel errors
+// error; callers should not pass 0, which also yields an *APIError. Access-token related codes are mapped to the exported sentinel errors
 // so callers can detect them with errors.Is; every other code produces an
 // *APIError carrying the raw code and message.
 func ClassifyBusinessError(code int, msg, rid string) error {
