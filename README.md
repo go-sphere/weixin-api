@@ -106,7 +106,10 @@ By default a covered endpoint must answer with a signed response: if the reply
 carries no `Wechatmp-Signature` the call fails rather than silently falling back
 to unverified plain text, which is what "防篡改" is for. A body shaped like an
 encrypted envelope is never accepted unsigned, because that would surface as a
-successful call with zeroed fields. If a deployment genuinely receives unsigned
+successful call with zeroed fields. A plain non-zero `errcode` reply is the
+exception: it is classified before the signature check, so token errors still
+trigger the refresh-and-retry and other business errors keep their code. If a
+deployment genuinely receives unsigned
 replies, set `APISecurityConfig.AllowUnsignedResponses: true` to opt out.
 
 Four endpoints that the docs mark as supporting the layer are GET methods

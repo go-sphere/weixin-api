@@ -481,3 +481,60 @@ func TestUseInstallsDecoratorAfterConstruction(t *testing.T) {
 		t.Errorf("call after Use was not encrypted: %s", body)
 	}
 }
+
+// failingCache serves misses and rejects every write.
+type failingCache struct{}
+
+func (failingCache) Get(context.Context, string) (string, bool, error) { return "", false, nil }
+func (failingCache) SetWithTTL(context.Context, string, string, time.Duration) error {
+	return errors.New("cache down")
+}
+
+// TestGetAccessTokenSurvivesCacheWriteFailure pins that a fetched token is
+// returned even when it cannot be cached.
+func TestGetAccessTokenSurvivesCacheWriteFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"access_token": "TOK", "expires_in": 7200})
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(CredentialsOf(Credentials{AppID: "a", AppSecret: "s"}),
+		ClientOptions{BaseURL: srv.URL, HTTPClient: srv.Client(), Cache: failingCache{}})
+	tok, err := c.GetAccessToken(t.Context(), false)
+	if err != nil || tok != "TOK" {
+		t.Fatalf("got %q, %v; want TOK, nil", tok, err)
+	}
+}
+
+// TestGetAccessTokenIgnoresCallerCancellation pins that the shared token fetch
+// is not aborted by the cancellation of the caller that started it.
+func TestGetAccessTokenIgnoresCallerCancellation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"access_token": "TOK", "expires_in": 7200})
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(CredentialsOf(Credentials{AppID: "a", AppSecret: "s"}), ClientOptions{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if tok, err := c.GetAccessToken(ctx, true); err != nil || tok != "TOK" {
+		t.Fatalf("got %q, %v; want TOK, nil", tok, err)
+	}
+}
+
+// TestUnsignedTokenErrorRetriedUnderAPISecurity pins that a plain errcode reply
+// on an endpoint covered by the strict API security layer is classified as the
+// token error it is, so the forced refresh and retry still run.
+func TestUnsignedTokenErrorRetriedUnderAPISecurity(t *testing.T) {
+	var calls int
+	c := newTestEndpointClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		writeJSON(w, map[string]any{"errcode": 42001, "errmsg": "expired"})
+	})
+	c.Use(docAPISecurityFor(t, false, docPath))
+	_, err := Call[map[string]any](c, t.Context(), http.MethodPost, docPath, map[string]string{"openid": "o"}, nil, true, SignNone)
+	if !errors.Is(err, ErrorAccessTokenExpired) {
+		t.Fatalf("expected ErrorAccessTokenExpired, got %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected a retry, got %d calls", calls)
+	}
+}

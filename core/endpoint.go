@@ -507,8 +507,13 @@ func (c *EndpointClient) buildUploadRequest(ctx context.Context, token, path str
 // do sends the request and returns the response bytes, turning a non-zero
 // errcode envelope into a classified error.
 //
-// The installed RequestModifiers may replace the response body before the errcode
-// envelope is inspected (see modifier.go), which is how the API security layer
+// A plain non-zero errcode envelope is classified before the installed
+// RequestModifiers run. WeChat answers token and parameter failures unsigned
+// even on endpoints covered by the API security layer, so checking first keeps
+// those errors (and the token refresh retry in send) from being masked by a
+// "missing signature" failure; a forged envelope can only produce an error.
+// Otherwise the modifiers may replace the body before the errcode envelope is
+// inspected again (see modifier.go), which is how the API security layer
 // verifies and decrypts an encrypted reply.
 func (c *EndpointClient) do(ctx context.Context, httpReq *http.Request, path string) ([]byte, error) {
 	resp, err := c.httpClient.Do(httpReq)
@@ -522,6 +527,9 @@ func (c *EndpointClient) do(ctx context.Context, httpReq *http.Request, path str
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("wechat: unexpected HTTP status %d for %s %s", resp.StatusCode, httpReq.Method, httpReq.URL.Path)
+	}
+	if bizErr := scanErrorBody(data); bizErr != nil {
+		return nil, bizErr
 	}
 	info := RequestInfo{URLPath: c.baseURL + path, Path: path, Method: httpReq.Method, Credentials: c.Credentials()}
 	if data, err = c.modifyResponse(info, resp.Header, data); err != nil {
