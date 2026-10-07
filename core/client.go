@@ -191,15 +191,17 @@ func (c *Client) fetchAccessToken(ctx context.Context) (string, int, error) {
 // refresh. A cache read error is treated as a miss.
 //
 // Concurrent callers for the same account share a single upstream token
-// request (singleflight); they all receive its result, including an error
-// caused by cancellation of the context of the caller that started it. The
-// fetched token is cached for the server's expires_in minus a 2s safety
-// margin; a response without a positive expires_in is not cached.
+// request (singleflight). The shared request ignores cancellation of the
+// caller that started it, so one cancelled caller does not fail the others;
+// it is bounded only by the HTTP client timeout. The fetched token is cached
+// for the server's expires_in minus a 2s safety margin; a response without a
+// positive expires_in is not cached. A cache write failure is ignored: the
+// fetched token is still returned and the next call fetches again.
 //
 // Errors: errcode 40001, 40014 and 42001 return ErrorInvalidCredential,
 // ErrorInvalidAccessToken and ErrorAccessTokenExpired; any other non-zero
-// errcode returns an *APIError. Transport, decode and cache write failures are
-// returned wrapped, and a response with an empty access_token is an error.
+// errcode returns an *APIError. Transport and decode failures are returned
+// wrapped, and a response with an empty access_token is an error.
 //
 // Reference: https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html
 func (c *Client) GetAccessToken(ctx context.Context, reload bool) (string, error) {
@@ -210,15 +212,14 @@ func (c *Client) GetAccessToken(ctx context.Context, reload bool) (string, error
 		}
 	}
 	val, err, _ := c.sf.Do(cacheKey, func() (any, error) {
-		token, expiresIn, err := c.fetchAccessToken(ctx)
+		fetchCtx := context.WithoutCancel(ctx)
+		token, expiresIn, err := c.fetchAccessToken(fetchCtx)
 		if err != nil {
 			return "", err
 		}
 		if expiresIn > 0 {
 			ttl := time.Duration(expiresIn)*time.Second - tokenExpirySafetyMargin
-			if err := c.cache.SetWithTTL(ctx, cacheKey, token, ttl); err != nil {
-				return "", fmt.Errorf("wechat: cache access token: %w", err)
-			}
+			_ = c.cache.SetWithTTL(fetchCtx, cacheKey, token, ttl)
 		}
 		return token, nil
 	})

@@ -17,8 +17,8 @@ type Cache interface {
 	// cached (or already expired). Implementations should return nil error
 	// instead of "not found" style errors.
 	Get(ctx context.Context, key string) (value string, exist bool, err error)
-	// SetWithTTL stores value under key for ttl. A returned error fails
-	// the token fetch that tried to cache the value.
+	// SetWithTTL stores value under key for ttl. A returned error is ignored
+	// by the token fetch: the token is still used, just not cached.
 	SetWithTTL(ctx context.Context, key string, value string, ttl time.Duration) error
 }
 
